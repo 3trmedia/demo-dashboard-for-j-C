@@ -1,11 +1,14 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import jcLogo from "./assets/jc-logo-horizontal.png";
+import { addDaysISO, buildMonthGrid, toISODate } from "./lib/calendarGrid";
 
 type JobStatus = "Booked" | "In Progress" | "Done";
 type Service = "Driveway" | "Sealcoat" | "Parking Lot";
 type ClosedBy = "Jeffrey" | "Alex (Sales Rep)" | null;
-type JobDate = "Today" | "Tomorrow" | "Wed" | "Thu" | "Fri";
 type LeadStage = "Needs Visit" | "Needs Call";
+
+/** Fixed "today" anchor for this mockup's placeholder data (real date: 2026-09-14). */
+const TODAY_ISO = "2026-09-14";
 
 interface Lead {
   id: number;
@@ -20,7 +23,8 @@ interface Job {
   customer: string;
   service: Service;
   status: JobStatus;
-  date: JobDate;
+  /** ISO date (YYYY-MM-DD) */
+  date: string;
   filmed: boolean;
   closedBy: ClosedBy;
   serviced: boolean;
@@ -84,7 +88,7 @@ const initialJobs: Job[] = [
     customer: "Karen Thomas",
     service: "Driveway",
     status: "Booked",
-    date: "Today",
+    date: TODAY_ISO,
     filmed: false,
     closedBy: "Jeffrey",
     serviced: false,
@@ -95,7 +99,7 @@ const initialJobs: Job[] = [
     customer: "Doug Reeser",
     service: "Sealcoat",
     status: "In Progress",
-    date: "Today",
+    date: TODAY_ISO,
     filmed: true,
     closedBy: "Alex (Sales Rep)",
     serviced: false,
@@ -106,7 +110,7 @@ const initialJobs: Job[] = [
     customer: "Sam Whitfield",
     service: "Parking Lot",
     status: "Done",
-    date: "Today",
+    date: TODAY_ISO,
     filmed: true,
     closedBy: "Jeffrey",
     serviced: true,
@@ -117,7 +121,7 @@ const initialJobs: Job[] = [
     customer: "Linda Park",
     service: "Driveway",
     status: "Booked",
-    date: "Tomorrow",
+    date: addDaysISO(TODAY_ISO, 1),
     filmed: false,
     closedBy: null,
     serviced: false,
@@ -128,10 +132,21 @@ const initialJobs: Job[] = [
     customer: "Ray Ostergaard",
     service: "Sealcoat",
     status: "Done",
-    date: "Fri",
+    date: addDaysISO(TODAY_ISO, 4),
     filmed: true,
     closedBy: "Alex (Sales Rep)",
     serviced: true,
+    paid: false,
+  },
+  {
+    id: 6,
+    customer: "Bishop Realty",
+    service: "Parking Lot",
+    status: "Booked",
+    date: addDaysISO(TODAY_ISO, 9),
+    filmed: false,
+    closedBy: "Jeffrey",
+    serviced: false,
     paid: false,
   },
 ];
@@ -168,15 +183,7 @@ const weekBars: { day: string; count: number; isToday: boolean }[] = [
   { day: "Sa", count: 0, isToday: false },
 ];
 
-const WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"] as const;
-const TODAY_WEEKDAY = "Th";
-const JOB_DATE_TO_WEEKDAY: Record<JobDate, (typeof WEEKDAYS)[number]> = {
-  Today: "Th",
-  Tomorrow: "Fr",
-  Wed: "We",
-  Thu: "Th",
-  Fri: "Fr",
-};
+const CALENDAR_WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"];
 
 const SECTION_TITLES: Record<string, string> = {
   needsVisit: "Needs a Visit",
@@ -184,6 +191,7 @@ const SECTION_TITLES: Record<string, string> = {
   pulse: "Overview",
   todaysJobs: "Today's Jobs",
   upcomingJobs: "Upcoming Jobs",
+  monthCalendar: "Job Calendar",
   activity: "Recent Activity",
 };
 
@@ -198,8 +206,16 @@ const PAGES: { id: PageId; label: string; icon: string }[] = [
 const DEFAULT_ORDER: Record<PageId, string[]> = {
   todo: ["todaysJobs", "needsVisit", "needsCall"],
   leads: ["pulse", "activity"],
-  jobs: ["upcomingJobs"],
+  jobs: ["upcomingJobs", "monthCalendar"],
 };
+
+/** Keep ids still valid, drop stale ones, and append any newly-added default sections. */
+function reconcileOrder(saved: string[], defaults: string[]): string[] {
+  const defaultSet = new Set(defaults);
+  const kept = saved.filter((id) => defaultSet.has(id));
+  const missing = defaults.filter((id) => !kept.includes(id));
+  return [...kept, ...missing];
+}
 
 const DEFAULT_COLLAPSED: Record<string, boolean> = {};
 
@@ -208,6 +224,14 @@ const MOVE_CANCEL_PX = 8;
 
 function firstName(name: string) {
   return name.split(" ")[0];
+}
+
+function formatShortDate(iso: string) {
+  return new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
 }
 
 function loadJSON<T>(key: string, fallback: T, isValid?: (value: unknown) => value is T): T {
@@ -315,7 +339,7 @@ function JobCard({
       <div className="mt-3 flex items-center gap-2 text-sm text-neutral-500">
         <span>{job.filmed ? "🎥 Filmed" : "🎥 Not filmed"}</span>
         {!compact && <span className="text-neutral-300">•</span>}
-        {!compact && <span>{job.date}</span>}
+        {!compact && <span>{formatShortDate(job.date)}</span>}
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -397,6 +421,154 @@ function LeadRow({
           ✓ Close &amp; book
         </button>
       </div>
+    </div>
+  );
+}
+
+function MonthCalendar({ jobs }: { jobs: Job[] }) {
+  const [cursor, setCursor] = useState(() => {
+    const [y, m] = TODAY_ISO.split("-").map(Number);
+    return new Date(y, m - 1, 1);
+  });
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+
+  const year = cursor.getFullYear();
+  const month = cursor.getMonth();
+  const grid = useMemo(() => buildMonthGrid(year, month), [year, month]);
+
+  const jobsByDate = useMemo(() => {
+    const map: Record<string, Job[]> = {};
+    for (const job of jobs) {
+      (map[job.date] ??= []).push(job);
+    }
+    return map;
+  }, [jobs]);
+
+  function changeMonth(delta: number) {
+    setCursor(new Date(year, month + delta, 1));
+  }
+
+  const selectedJobs = selectedDate ? jobsByDate[selectedDate] ?? [] : [];
+
+  return (
+    <div>
+      <div className="flex items-center justify-between">
+        <button
+          onClick={() => changeMonth(-1)}
+          aria-label="Previous month"
+          className="flex h-8 w-8 items-center justify-center rounded-full text-lg text-neutral-400 hover:bg-neutral-50"
+        >
+          ‹
+        </button>
+        <span className="text-sm font-semibold text-neutral-900">
+          {cursor.toLocaleDateString(undefined, { month: "long", year: "numeric" })}
+        </span>
+        <button
+          onClick={() => changeMonth(1)}
+          aria-label="Next month"
+          className="flex h-8 w-8 items-center justify-center rounded-full text-lg text-neutral-400 hover:bg-neutral-50"
+        >
+          ›
+        </button>
+      </div>
+
+      <div className="mt-3 grid grid-cols-7 gap-y-1 text-center text-[10px] font-medium text-neutral-400">
+        {CALENDAR_WEEKDAYS.map((w, i) => (
+          <span key={i}>{w}</span>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-7 gap-y-1 text-center">
+        {grid.map((d, i) => {
+          if (d === null) return <div key={i} />;
+          const iso = toISODate(year, month, d);
+          const dayJobs = jobsByDate[iso] ?? [];
+          const isToday = iso === TODAY_ISO;
+          return (
+            <button
+              key={i}
+              onClick={() => setSelectedDate(iso)}
+              className="flex flex-col items-center gap-0.5 rounded-lg py-1.5 hover:bg-neutral-50"
+            >
+              <span
+                className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-medium ${
+                  isToday ? "text-white" : "text-neutral-700"
+                }`}
+                style={isToday ? { backgroundColor: ACCENT } : undefined}
+              >
+                {d}
+              </span>
+              <span className="flex h-1.5 items-center gap-0.5">
+                {dayJobs.length > 0 && (
+                  <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: ACCENT }} />
+                )}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="mt-3 flex items-center gap-4 text-xs text-neutral-400">
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: ACCENT }} />
+          Has jobs
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full border border-neutral-200" />
+          Free day
+        </span>
+      </div>
+
+      {selectedDate && (
+        <div
+          className="fixed inset-0 z-20 flex items-end justify-center bg-black/30 sm:items-center"
+          onClick={() => setSelectedDate(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-t-2xl bg-white p-6 sm:rounded-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <p className="font-semibold text-neutral-900">
+                {new Date(`${selectedDate}T00:00:00`).toLocaleDateString(undefined, {
+                  weekday: "long",
+                  month: "long",
+                  day: "numeric",
+                })}
+              </p>
+              <button
+                onClick={() => setSelectedDate(null)}
+                className="text-sm font-medium text-neutral-400"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="mt-4 flex flex-col gap-2">
+              {selectedJobs.length === 0 && (
+                <p className="text-sm text-neutral-400">Free — no jobs scheduled.</p>
+              )}
+              {selectedJobs.map((job) => (
+                <div
+                  key={job.id}
+                  className="flex items-center gap-2 rounded-xl border border-neutral-100 bg-neutral-50/60 p-3"
+                >
+                  <span className="text-lg leading-none">{serviceIcon[job.service]}</span>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-neutral-900">{job.customer}</p>
+                    <p className="text-xs text-neutral-500">{job.service}</p>
+                  </div>
+                  <span
+                    className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-medium ${statusStyles[job.status]}`}
+                  >
+                    {job.status}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -490,9 +662,14 @@ export default function App() {
   const [activity, setActivity] = useState<ActivityItem[]>(initialActivity);
 
   const [page, setPage] = useState<PageId>("todo");
-  const [ordersByPage, setOrdersByPage] = useState<Record<PageId, string[]>>(() =>
-    loadJSON("jc-section-order-v3", DEFAULT_ORDER, isOrdersByPage),
-  );
+  const [ordersByPage, setOrdersByPage] = useState<Record<PageId, string[]>>(() => {
+    const loaded = loadJSON("jc-section-order-v3", DEFAULT_ORDER, isOrdersByPage);
+    return {
+      todo: reconcileOrder(loaded.todo, DEFAULT_ORDER.todo),
+      leads: reconcileOrder(loaded.leads, DEFAULT_ORDER.leads),
+      jobs: reconcileOrder(loaded.jobs, DEFAULT_ORDER.jobs),
+    };
+  });
   const [collapsedMap, setCollapsedMap] = useState<Record<string, boolean>>(() =>
     loadJSON("jc-section-collapsed", DEFAULT_COLLAPSED),
   );
@@ -659,7 +836,7 @@ export default function App() {
         customer: lead.name,
         service: lead.service,
         status: "Booked",
-        date: "Tomorrow",
+        date: addDaysISO(TODAY_ISO, 1),
         filmed: false,
         closedBy: "Jeffrey",
         serviced: false,
@@ -682,14 +859,9 @@ export default function App() {
     Done: "#2f6f4f",
   };
 
-  const todaysJobs = jobs.filter((j) => j.date === "Today").slice(0, 3);
+  const todaysJobs = jobs.filter((j) => j.date === TODAY_ISO).slice(0, 3);
   const maxBar = Math.max(...weekBars.map((b) => b.count), 1);
   const totalSourceLeads = leadSources.reduce((sum, s) => sum + s.value, 0);
-
-  const calendarDays = WEEKDAYS.map((day) => {
-    const dayJobs = jobs.filter((j) => JOB_DATE_TO_WEEKDAY[j.date] === day);
-    return { day, count: dayJobs.length, isToday: day === TODAY_WEEKDAY };
-  });
 
   const sectionBadge: Record<string, React.ReactNode> = {
     needsVisit: (
@@ -827,56 +999,19 @@ export default function App() {
       </div>
     ),
     upcomingJobs: (
-      <div>
-        <div className="flex flex-col gap-3">
-          {jobs.map((job) => (
-            <JobCard
-              key={job.id}
-              job={job}
-              onClosedBy={(v) => handleClosedBy(job, v)}
-              onToggleServiced={() => toggleServiced(job)}
-              onTogglePaid={() => togglePaid(job)}
-            />
-          ))}
-        </div>
-
-        <hr className="my-5 border-neutral-100" />
-
-        <p className="text-xs font-semibold uppercase tracking-wide text-neutral-400">This Week</p>
-        <div className="mt-3 flex items-center justify-between gap-2">
-          {calendarDays.map((d) => (
-            <div key={d.day} className="flex flex-1 flex-col items-center gap-1.5">
-              <div
-                className="flex h-9 w-9 items-center justify-center rounded-full text-xs font-semibold"
-                style={
-                  d.count > 0
-                    ? { backgroundColor: ACCENT, color: "white" }
-                    : { backgroundColor: "#f0eeec", color: "#a3a3a3" }
-                }
-              >
-                {d.count > 0 ? d.count : ""}
-              </div>
-              <span
-                className="text-[10px] font-medium"
-                style={{ color: d.isToday ? ACCENT : "#a3a3a3" }}
-              >
-                {d.day}
-              </span>
-            </div>
-          ))}
-        </div>
-        <div className="mt-3 flex items-center gap-4 text-xs text-neutral-400">
-          <span className="flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: ACCENT }} />
-            Has jobs
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-full bg-[#f0eeec]" />
-            Free day
-          </span>
-        </div>
+      <div className="flex flex-col gap-3">
+        {jobs.map((job) => (
+          <JobCard
+            key={job.id}
+            job={job}
+            onClosedBy={(v) => handleClosedBy(job, v)}
+            onToggleServiced={() => toggleServiced(job)}
+            onTogglePaid={() => togglePaid(job)}
+          />
+        ))}
       </div>
     ),
+    monthCalendar: <MonthCalendar jobs={jobs} />,
     activity: (
       <ul className="flex flex-col gap-3">
         {activity.map((item, i) => (
