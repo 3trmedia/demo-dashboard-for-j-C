@@ -1,16 +1,31 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { IconType } from "react-icons";
-import { LuHouse, LuDroplet, LuSquareParking, LuVideo, LuCalendar } from "react-icons/lu";
-import { FiHome, FiDroplet, FiTruck, FiVideo, FiCalendar } from "react-icons/fi";
 import {
-  HiOutlineHome,
-  HiOutlineBeaker,
-  HiOutlineTruck,
-  HiOutlineVideoCamera,
-  HiOutlineCalendarDays,
-} from "react-icons/hi2";
-import { TbHome, TbDroplet, TbParkingCircle, TbVideo, TbCalendar } from "react-icons/tb";
-import { PiHouse, PiDrop, PiCar, PiVideoCamera, PiCalendar } from "react-icons/pi";
+  PiHouse,
+  PiDrop,
+  PiSquaresFour,
+  PiVideoCamera,
+  PiCalendarBlank,
+  PiCalendarCheck,
+  PiPhone,
+  PiChatCircleText,
+  PiEnvelopeSimple,
+  PiWrench,
+  PiSparkle,
+  PiCheckCircle,
+  PiHandshake,
+  PiBroom,
+  PiCurrencyDollar,
+  PiCar,
+  PiStar,
+  PiCaretLeft,
+  PiCaretRight,
+  PiCaretDown,
+  PiDotsSixVertical,
+  PiListChecks,
+  PiChartLineUp,
+  PiCheck,
+} from "react-icons/pi";
 import jcLogo from "./assets/jc-logo-horizontal.png";
 import { addDaysISO, buildMonthGrid, toISODate } from "./lib/calendarGrid";
 
@@ -48,16 +63,16 @@ interface Job {
 }
 
 interface ActivityItem {
-  icon: string;
+  icon: IconType;
   text: string;
 }
 
 const ACCENT = "#cd553f";
 
-const serviceIcon: Record<Service, string> = {
-  Driveway: "🏠",
-  Sealcoat: "🛢️",
-  "Parking Lot": "🅿️",
+const serviceIcon: Record<Service, IconType> = {
+  Driveway: PiHouse,
+  Sealcoat: PiDrop,
+  "Parking Lot": PiSquaresFour,
 };
 
 const initialLeads: Lead[] = [
@@ -243,12 +258,12 @@ const initialJobs: Job[] = [
 ];
 
 const initialActivity: ActivityItem[] = [
-  { icon: "⭐", text: "New 5-star review from Sam" },
-  { icon: "📅", text: "Karen booked a driveway job" },
-  { icon: "📞", text: "Missed call from Mike — texted back in 8 seconds" },
-  { icon: "🔧", text: "Doug's sealcoat job marked In Progress" },
-  { icon: "🆕", text: "New lead: Linda Park requested a quote" },
-  { icon: "✅", text: "Ray's parking lot job serviced and closed out" },
+  { icon: PiStar, text: "New 5-star review from Sam" },
+  { icon: PiCalendarCheck, text: "Karen booked a driveway job" },
+  { icon: PiPhone, text: "Missed call from Mike — texted back in 8 seconds" },
+  { icon: PiWrench, text: "Doug's sealcoat job marked In Progress" },
+  { icon: PiSparkle, text: "New lead: Linda Park requested a quote" },
+  { icon: PiCheckCircle, text: "Ray's parking lot job serviced and closed out" },
 ];
 
 const statusStyles: Record<JobStatus, string> = {
@@ -284,7 +299,6 @@ const SECTION_TITLES: Record<string, string> = {
   todaysJobs: "Today's Jobs",
   upcomingJobs: "Upcoming Jobs",
   monthCalendar: "Job Calendar",
-  iconPreview: "Icon Style Preview (temporary)",
   activity: "Recent Activity",
 };
 
@@ -299,35 +313,18 @@ const STAGE_COLOR: Record<LeadStage, string> = {
 const LEAD_ROW_HEIGHT = 76;
 const LEAD_LIST_VISIBLE_ROWS = 5;
 
-interface IconPack {
-  name: string;
-  driveway: IconType;
-  sealcoat: IconType;
-  parkingLot: IconType;
-  filmed: IconType;
-  calendar: IconType;
-}
-
-const ICON_PACKS: IconPack[] = [
-  { name: "Lucide", driveway: LuHouse, sealcoat: LuDroplet, parkingLot: LuSquareParking, filmed: LuVideo, calendar: LuCalendar },
-  { name: "Feather", driveway: FiHome, sealcoat: FiDroplet, parkingLot: FiTruck, filmed: FiVideo, calendar: FiCalendar },
-  { name: "Heroicons", driveway: HiOutlineHome, sealcoat: HiOutlineBeaker, parkingLot: HiOutlineTruck, filmed: HiOutlineVideoCamera, calendar: HiOutlineCalendarDays },
-  { name: "Tabler", driveway: TbHome, sealcoat: TbDroplet, parkingLot: TbParkingCircle, filmed: TbVideo, calendar: TbCalendar },
-  { name: "Phosphor", driveway: PiHouse, sealcoat: PiDrop, parkingLot: PiCar, filmed: PiVideoCamera, calendar: PiCalendar },
-];
-
 type PageId = "todo" | "leads" | "jobs";
 
-const PAGES: { id: PageId; label: string; icon: string }[] = [
-  { id: "todo", label: "To Do", icon: "✅" },
-  { id: "leads", label: "Leads", icon: "📈" },
-  { id: "jobs", label: "Calendar", icon: "📅" },
+const PAGES: { id: PageId; label: string; icon: IconType }[] = [
+  { id: "todo", label: "To Do", icon: PiListChecks },
+  { id: "leads", label: "Leads", icon: PiChartLineUp },
+  { id: "jobs", label: "Calendar", icon: PiCalendarBlank },
 ];
 
 const DEFAULT_ORDER: Record<PageId, string[]> = {
   todo: ["todaysJobs", "needsVisit", "needsCall"],
   leads: ["pulse", "allLeads", "activity"],
-  jobs: ["upcomingJobs", "monthCalendar", "iconPreview"],
+  jobs: ["upcomingJobs", "monthCalendar"],
 };
 
 /** Keep ids still valid, drop stale ones, and append any newly-added default sections. */
@@ -438,13 +435,14 @@ function JobCard({
   onTogglePaid: () => void;
   compact?: boolean;
 }) {
+  const ServiceIcon = serviceIcon[job.service];
   return (
     <div
       className={`rounded-xl border border-neutral-100 bg-white p-4 ${compact ? "shadow-sm" : ""}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2">
-          <span className="text-xl leading-none">{serviceIcon[job.service]}</span>
+          <ServiceIcon size={20} className="shrink-0 text-neutral-500" />
           <div>
             <p className="font-semibold text-neutral-900">{job.customer}</p>
             <p className="text-sm text-neutral-500">{job.service}</p>
@@ -457,8 +455,9 @@ function JobCard({
         </span>
       </div>
 
-      <div className="mt-3 flex items-center gap-2 text-sm text-neutral-500">
-        <span>{job.filmed ? "🎥 Filmed" : "🎥 Not filmed"}</span>
+      <div className="mt-3 flex items-center gap-1.5 text-sm text-neutral-500">
+        <PiVideoCamera size={16} />
+        <span>{job.filmed ? "Filmed" : "Not filmed"}</span>
         {!compact && <span className="text-neutral-300">•</span>}
         {!compact && <span>{formatShortDate(job.date)}</span>}
       </div>
@@ -483,24 +482,26 @@ function JobCard({
 
         <button
           onClick={onToggleServiced}
-          className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+          className={`flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
             job.serviced
               ? "border-emerald-300 bg-emerald-50 text-emerald-700"
               : "border-neutral-200 bg-white text-neutral-500"
           }`}
         >
-          {job.serviced ? "✓ Serviced" : "Mark serviced"}
+          {job.serviced && <PiCheck size={14} />}
+          {job.serviced ? "Serviced" : "Mark serviced"}
         </button>
 
         <button
           onClick={onTogglePaid}
-          className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+          className={`flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
             job.paid
               ? "border-emerald-300 bg-emerald-50 text-emerald-700"
               : "border-neutral-200 bg-white text-neutral-500"
           }`}
         >
-          {job.paid ? "✓ Paid" : "Mark paid"}
+          {job.paid && <PiCheck size={14} />}
+          {job.paid ? "Paid" : "Mark paid"}
         </button>
       </div>
     </div>
@@ -518,10 +519,11 @@ function LeadRow({
   onPrimary: () => void;
   onCloseAndBook: () => void;
 }) {
+  const ServiceIcon = serviceIcon[lead.service];
   return (
     <div className="rounded-xl border border-neutral-100 bg-white p-4">
       <div className="flex items-start gap-2">
-        <span className="text-xl leading-none">{serviceIcon[lead.service]}</span>
+        <ServiceIcon size={20} className="mt-0.5 shrink-0 text-neutral-500" />
         <div>
           <p className="font-semibold text-neutral-900">{lead.name}</p>
           <p className="text-sm text-neutral-500">{lead.reason}</p>
@@ -536,10 +538,11 @@ function LeadRow({
         </button>
         <button
           onClick={onCloseAndBook}
-          className="rounded-full border px-3 py-1.5 text-xs font-medium"
+          className="flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-medium"
           style={{ borderColor: `${ACCENT}66`, backgroundColor: `${ACCENT}1a`, color: ACCENT }}
         >
-          ✓ Close &amp; book
+          <PiCheck size={14} />
+          Close &amp; book
         </button>
       </div>
     </div>
@@ -547,12 +550,13 @@ function LeadRow({
 }
 
 function LeadContactRow({ lead }: { lead: Lead }) {
+  const ServiceIcon = serviceIcon[lead.service];
   return (
     <div
       className="flex items-center gap-3 border-b border-neutral-100 py-3 last:border-0"
       style={{ minHeight: LEAD_ROW_HEIGHT }}
     >
-      <span className="text-xl leading-none">{serviceIcon[lead.service]}</span>
+      <ServiceIcon size={20} className="shrink-0 text-neutral-500" />
       <div className="min-w-0 flex-1">
         <p className="truncate font-semibold text-neutral-900">{lead.name}</p>
         <p className="truncate text-xs text-neutral-400">
@@ -569,52 +573,24 @@ function LeadContactRow({ lead }: { lead: Lead }) {
         <a
           href={`tel:${lead.phone}`}
           aria-label={`Call ${lead.name}`}
-          className="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-50 text-sm"
+          className="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-50 text-neutral-500"
         >
-          📞
+          <PiPhone size={16} />
         </a>
         <a
           href={`sms:${lead.phone}`}
           aria-label={`Text ${lead.name}`}
-          className="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-50 text-sm"
+          className="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-50 text-neutral-500"
         >
-          💬
+          <PiChatCircleText size={16} />
         </a>
         <a
           href={`mailto:${lead.email}`}
           aria-label={`Email ${lead.name}`}
-          className="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-50 text-sm"
+          className="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-50 text-neutral-500"
         >
-          ✉️
+          <PiEnvelopeSimple size={16} />
         </a>
-      </div>
-    </div>
-  );
-}
-
-function IconPackRow({ pack }: { pack: IconPack }) {
-  const items: { label: string; Icon: IconType }[] = [
-    { label: "Driveway", Icon: pack.driveway },
-    { label: "Sealcoat", Icon: pack.sealcoat },
-    { label: "Parking", Icon: pack.parkingLot },
-    { label: "Filmed", Icon: pack.filmed },
-    { label: "Calendar", Icon: pack.calendar },
-  ];
-  return (
-    <div className="rounded-xl border border-neutral-100 bg-white p-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-neutral-400">{pack.name}</p>
-      <div className="mt-3 flex items-center justify-between">
-        {items.map(({ label, Icon }) => (
-          <div key={label} className="flex flex-col items-center gap-1.5">
-            <div
-              className="flex h-10 w-10 items-center justify-center rounded-full"
-              style={{ backgroundColor: `${ACCENT}14`, color: ACCENT }}
-            >
-              <Icon size={20} />
-            </div>
-            <span className="text-[10px] text-neutral-400">{label}</span>
-          </div>
-        ))}
       </div>
     </div>
   );
@@ -651,9 +627,9 @@ function MonthCalendar({ jobs }: { jobs: Job[] }) {
         <button
           onClick={() => changeMonth(-1)}
           aria-label="Previous month"
-          className="flex h-8 w-8 items-center justify-center rounded-full text-lg text-neutral-400 hover:bg-neutral-50"
+          className="flex h-8 w-8 items-center justify-center rounded-full text-neutral-400 hover:bg-neutral-50"
         >
-          ‹
+          <PiCaretLeft size={18} />
         </button>
         <span className="text-sm font-semibold text-neutral-900">
           {cursor.toLocaleDateString(undefined, { month: "long", year: "numeric" })}
@@ -661,9 +637,9 @@ function MonthCalendar({ jobs }: { jobs: Job[] }) {
         <button
           onClick={() => changeMonth(1)}
           aria-label="Next month"
-          className="flex h-8 w-8 items-center justify-center rounded-full text-lg text-neutral-400 hover:bg-neutral-50"
+          className="flex h-8 w-8 items-center justify-center rounded-full text-neutral-400 hover:bg-neutral-50"
         >
-          ›
+          <PiCaretRight size={18} />
         </button>
       </div>
 
@@ -743,12 +719,14 @@ function MonthCalendar({ jobs }: { jobs: Job[] }) {
               {selectedJobs.length === 0 && (
                 <p className="text-sm text-neutral-400">Free — no jobs scheduled.</p>
               )}
-              {selectedJobs.map((job) => (
+              {selectedJobs.map((job) => {
+                const ServiceIcon = serviceIcon[job.service];
+                return (
                 <div
                   key={job.id}
                   className="flex items-center gap-2 rounded-xl border border-neutral-100 bg-neutral-50/60 p-3"
                 >
-                  <span className="text-lg leading-none">{serviceIcon[job.service]}</span>
+                  <ServiceIcon size={18} className="shrink-0 text-neutral-500" />
                   <div className="flex-1">
                     <p className="text-sm font-medium text-neutral-900">{job.customer}</p>
                     <p className="text-xs text-neutral-500">{job.service}</p>
@@ -759,7 +737,8 @@ function MonthCalendar({ jobs }: { jobs: Job[] }) {
                     {job.status}
                   </span>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
@@ -820,10 +799,10 @@ function DraggableSection({
           className="flex flex-1 items-center gap-2 text-left"
         >
           <span
-            className={`inline-block transition-transform ${accent ? "text-white/70" : "text-neutral-400"}`}
+            className={`inline-flex transition-transform ${accent ? "text-white/70" : "text-neutral-400"}`}
             style={{ transform: collapsed ? "rotate(-90deg)" : "rotate(0deg)" }}
           >
-            ▾
+            <PiCaretDown size={16} />
           </span>
           <SectionLabel accent={accent}>{title}</SectionLabel>
         </button>
@@ -836,12 +815,12 @@ function DraggableSection({
               onPointerUp={onHandlePointerUp}
               onPointerCancel={onHandlePointerUp}
               onContextMenu={(e) => e.preventDefault()}
-              className={`cursor-grab select-none rounded px-2 py-1 text-base leading-none active:cursor-grabbing ${
+              className={`flex cursor-grab select-none items-center rounded px-2 py-1 active:cursor-grabbing ${
                 accent ? "text-white/50" : "text-neutral-300"
               }`}
               style={{ touchAction: "none" }}
             >
-              ⠿
+              <PiDotsSixVertical size={18} />
             </span>
           )}
         </div>
@@ -978,7 +957,7 @@ export default function App() {
     };
   }
 
-  function logActivity(icon: string, text: string) {
+  function logActivity(icon: IconType, text: string) {
     setActivity((prev) => [{ icon, text }, ...prev].slice(0, 12));
   }
 
@@ -990,7 +969,7 @@ export default function App() {
     const closedBy = (value || null) as ClosedBy;
     updateJob(job.id, { closedBy });
     if (closedBy) {
-      logActivity("🤝", `${closedBy} closed ${firstName(job.customer)}'s ${job.service.toLowerCase()} job`);
+      logActivity(PiHandshake, `${closedBy} closed ${firstName(job.customer)}'s ${job.service.toLowerCase()} job`);
     }
   }
 
@@ -998,7 +977,7 @@ export default function App() {
     const serviced = !job.serviced;
     updateJob(job.id, { serviced });
     if (serviced) {
-      logActivity("🧹", `${firstName(job.customer)}'s ${job.service.toLowerCase()} job marked as serviced`);
+      logActivity(PiBroom, `${firstName(job.customer)}'s ${job.service.toLowerCase()} job marked as serviced`);
     }
   }
 
@@ -1006,7 +985,7 @@ export default function App() {
     const paid = !job.paid;
     updateJob(job.id, { paid });
     if (paid) {
-      logActivity("💰", `${firstName(job.customer)}'s job marked fully paid`);
+      logActivity(PiCurrencyDollar, `${firstName(job.customer)}'s job marked fully paid`);
     }
   }
 
@@ -1016,11 +995,11 @@ export default function App() {
         l.id === lead.id ? { ...l, stage: "Needs Call", reason: "Visited — following up by phone" } : l,
       ),
     );
-    logActivity("🚗", `Jeffrey visited ${firstName(lead.name)}`);
+    logActivity(PiCar, `Jeffrey visited ${firstName(lead.name)}`);
   }
 
   function markCalled(lead: Lead) {
-    logActivity("📞", `Jeffrey called ${firstName(lead.name)}`);
+    logActivity(PiPhone, `Jeffrey called ${firstName(lead.name)}`);
   }
 
   function closeAndBook(lead: Lead) {
@@ -1039,7 +1018,7 @@ export default function App() {
       },
       ...prev,
     ]);
-    logActivity("🤝", `Jeffrey closed ${firstName(lead.name)}'s ${lead.service.toLowerCase()} job`);
+    logActivity(PiHandshake, `Jeffrey closed ${firstName(lead.name)}'s ${lead.service.toLowerCase()} job`);
   }
 
   const needsVisit = leads.filter((l) => l.stage === "Needs Visit");
@@ -1209,19 +1188,6 @@ export default function App() {
       </div>
     ),
     monthCalendar: <MonthCalendar jobs={jobs} />,
-    iconPreview: (
-      <div>
-        <p className="mb-3 text-sm text-neutral-500">
-          Same 5 icons in 5 different packs — tell me which style to use everywhere and I'll
-          swap it in and remove this section.
-        </p>
-        <div className="flex flex-col gap-3">
-          {ICON_PACKS.map((pack) => (
-            <IconPackRow key={pack.name} pack={pack} />
-          ))}
-        </div>
-      </div>
-    ),
     allLeads: (
       <div>
         <div
@@ -1241,8 +1207,8 @@ export default function App() {
       <ul className="flex flex-col gap-3">
         {activity.map((item, i) => (
           <li key={`${item.text}-${i}`} className="flex items-center gap-3 text-sm text-neutral-700">
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-neutral-50 text-sm">
-              {item.icon}
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-neutral-50 text-neutral-500">
+              <item.icon size={16} />
             </span>
             <span>{item.text}</span>
           </li>
@@ -1297,7 +1263,7 @@ export default function App() {
                 className="flex flex-1 flex-col items-center gap-0.5 py-2.5 text-xs font-medium"
                 style={{ color: active ? ACCENT : "#a3a3a3" }}
               >
-                <span className="text-lg leading-none">{p.icon}</span>
+                <p.icon size={22} />
                 {p.label}
               </button>
             );
