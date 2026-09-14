@@ -168,10 +168,20 @@ const weekBars: { day: string; count: number; isToday: boolean }[] = [
   { day: "Sa", count: 0, isToday: false },
 ];
 
+const WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"] as const;
+const TODAY_WEEKDAY = "Th";
+const JOB_DATE_TO_WEEKDAY: Record<JobDate, (typeof WEEKDAYS)[number]> = {
+  Today: "Th",
+  Tomorrow: "Fr",
+  Wed: "We",
+  Thu: "Th",
+  Fri: "Fr",
+};
+
 const SECTION_TITLES: Record<string, string> = {
   needsVisit: "Needs a Visit",
   needsCall: "Needs a Call",
-  pulse: "Pulse",
+  pulse: "Overview",
   todaysJobs: "Today's Jobs",
   upcomingJobs: "Upcoming Jobs",
   activity: "Recent Activity",
@@ -182,11 +192,11 @@ type PageId = "todo" | "leads" | "jobs";
 const PAGES: { id: PageId; label: string; icon: string }[] = [
   { id: "todo", label: "To Do", icon: "✅" },
   { id: "leads", label: "Leads", icon: "📈" },
-  { id: "jobs", label: "Jobs", icon: "🧰" },
+  { id: "jobs", label: "Calendar", icon: "📅" },
 ];
 
 const DEFAULT_ORDER: Record<PageId, string[]> = {
-  todo: ["needsVisit", "needsCall", "todaysJobs"],
+  todo: ["todaysJobs", "needsVisit", "needsCall"],
   leads: ["pulse", "activity"],
   jobs: ["upcomingJobs"],
 };
@@ -219,9 +229,19 @@ function isOrdersByPage(value: unknown): value is Record<PageId, string[]> {
   return (["todo", "leads", "jobs"] as const).every((key) => Array.isArray(obj[key]));
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
+function SectionLabel({
+  children,
+  accent,
+}: {
+  children: React.ReactNode;
+  accent?: boolean;
+}) {
   return (
-    <h2 className="text-xs font-semibold uppercase tracking-wide text-neutral-400">
+    <h2
+      className={`text-xs font-semibold uppercase tracking-wide ${
+        accent ? "text-white/80" : "text-neutral-400"
+      }`}
+    >
       {children}
     </h2>
   );
@@ -275,9 +295,7 @@ function JobCard({
 }) {
   return (
     <div
-      className={`rounded-xl border bg-white p-4 ${
-        compact ? "border-[#cd553f]/30" : "border-neutral-100"
-      }`}
+      className={`rounded-xl border border-neutral-100 bg-white p-4 ${compact ? "shadow-sm" : ""}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2">
@@ -395,6 +413,7 @@ function DraggableSection({
   isDragging,
   dragY,
   showHandle = true,
+  accent = false,
   children,
 }: {
   title: string;
@@ -408,15 +427,21 @@ function DraggableSection({
   isDragging: boolean;
   dragY: number;
   showHandle?: boolean;
+  accent?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <div
       ref={registerRef}
-      className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-neutral-100"
+      className={`rounded-2xl p-6 shadow-sm ${accent ? "" : "bg-white ring-1 ring-neutral-100"}`}
       style={{
+        backgroundColor: accent ? ACCENT : undefined,
         transform: isDragging ? `translateY(${dragY}px) scale(1.02)` : undefined,
-        boxShadow: isDragging ? "0 16px 28px rgba(0,0,0,0.16)" : undefined,
+        boxShadow: isDragging
+          ? "0 16px 28px rgba(0,0,0,0.16)"
+          : accent
+            ? `0 8px 20px ${ACCENT}40`
+            : undefined,
         position: "relative",
         zIndex: isDragging ? 10 : undefined,
         transition: isDragging ? "none" : "transform 150ms ease",
@@ -428,12 +453,12 @@ function DraggableSection({
           className="flex flex-1 items-center gap-2 text-left"
         >
           <span
-            className="inline-block text-neutral-400 transition-transform"
+            className={`inline-block transition-transform ${accent ? "text-white/70" : "text-neutral-400"}`}
             style={{ transform: collapsed ? "rotate(-90deg)" : "rotate(0deg)" }}
           >
             ▾
           </span>
-          <SectionLabel>{title}</SectionLabel>
+          <SectionLabel accent={accent}>{title}</SectionLabel>
         </button>
         <div className="flex shrink-0 items-center gap-2">
           {badge}
@@ -444,7 +469,9 @@ function DraggableSection({
               onPointerUp={onHandlePointerUp}
               onPointerCancel={onHandlePointerUp}
               onContextMenu={(e) => e.preventDefault()}
-              className="cursor-grab select-none rounded px-2 py-1 text-base leading-none text-neutral-300 active:cursor-grabbing"
+              className={`cursor-grab select-none rounded px-2 py-1 text-base leading-none active:cursor-grabbing ${
+                accent ? "text-white/50" : "text-neutral-300"
+              }`}
               style={{ touchAction: "none" }}
             >
               ⠿
@@ -464,7 +491,7 @@ export default function App() {
 
   const [page, setPage] = useState<PageId>("todo");
   const [ordersByPage, setOrdersByPage] = useState<Record<PageId, string[]>>(() =>
-    loadJSON("jc-section-order-v2", DEFAULT_ORDER, isOrdersByPage),
+    loadJSON("jc-section-order-v3", DEFAULT_ORDER, isOrdersByPage),
   );
   const [collapsedMap, setCollapsedMap] = useState<Record<string, boolean>>(() =>
     loadJSON("jc-section-collapsed", DEFAULT_COLLAPSED),
@@ -477,7 +504,7 @@ export default function App() {
 
   useEffect(() => {
     try {
-      localStorage.setItem("jc-section-order-v2", JSON.stringify(ordersByPage));
+      localStorage.setItem("jc-section-order-v3", JSON.stringify(ordersByPage));
     } catch {
       // ignore — order just won't persist this session
     }
@@ -659,6 +686,11 @@ export default function App() {
   const maxBar = Math.max(...weekBars.map((b) => b.count), 1);
   const totalSourceLeads = leadSources.reduce((sum, s) => sum + s.value, 0);
 
+  const calendarDays = WEEKDAYS.map((day) => {
+    const dayJobs = jobs.filter((j) => JOB_DATE_TO_WEEKDAY[j.date] === day);
+    return { day, count: dayJobs.length, isToday: day === TODAY_WEEKDAY };
+  });
+
   const sectionBadge: Record<string, React.ReactNode> = {
     needsVisit: (
       <span
@@ -677,10 +709,7 @@ export default function App() {
       </span>
     ),
     todaysJobs: (
-      <span
-        className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
-        style={{ backgroundColor: `${ACCENT}1a`, color: ACCENT }}
-      >
+      <span className="rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-semibold text-white">
         {todaysJobs.length} to update
       </span>
     ),
@@ -783,7 +812,7 @@ export default function App() {
     todaysJobs: (
       <div className="flex flex-col gap-3">
         {todaysJobs.length === 0 && (
-          <p className="text-sm text-neutral-400">No jobs scheduled for today.</p>
+          <p className="text-sm text-white/70">No jobs scheduled for today.</p>
         )}
         {todaysJobs.map((job) => (
           <JobCard
@@ -798,16 +827,54 @@ export default function App() {
       </div>
     ),
     upcomingJobs: (
-      <div className="flex flex-col gap-3">
-        {jobs.map((job) => (
-          <JobCard
-            key={job.id}
-            job={job}
-            onClosedBy={(v) => handleClosedBy(job, v)}
-            onToggleServiced={() => toggleServiced(job)}
-            onTogglePaid={() => togglePaid(job)}
-          />
-        ))}
+      <div>
+        <div className="flex flex-col gap-3">
+          {jobs.map((job) => (
+            <JobCard
+              key={job.id}
+              job={job}
+              onClosedBy={(v) => handleClosedBy(job, v)}
+              onToggleServiced={() => toggleServiced(job)}
+              onTogglePaid={() => togglePaid(job)}
+            />
+          ))}
+        </div>
+
+        <hr className="my-5 border-neutral-100" />
+
+        <p className="text-xs font-semibold uppercase tracking-wide text-neutral-400">This Week</p>
+        <div className="mt-3 flex items-center justify-between gap-2">
+          {calendarDays.map((d) => (
+            <div key={d.day} className="flex flex-1 flex-col items-center gap-1.5">
+              <div
+                className="flex h-9 w-9 items-center justify-center rounded-full text-xs font-semibold"
+                style={
+                  d.count > 0
+                    ? { backgroundColor: ACCENT, color: "white" }
+                    : { backgroundColor: "#f0eeec", color: "#a3a3a3" }
+                }
+              >
+                {d.count > 0 ? d.count : ""}
+              </div>
+              <span
+                className="text-[10px] font-medium"
+                style={{ color: d.isToday ? ACCENT : "#a3a3a3" }}
+              >
+                {d.day}
+              </span>
+            </div>
+          ))}
+        </div>
+        <div className="mt-3 flex items-center gap-4 text-xs text-neutral-400">
+          <span className="flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: ACCENT }} />
+            Has jobs
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-full bg-[#f0eeec]" />
+            Free day
+          </span>
+        </div>
       </div>
     ),
     activity: (
@@ -852,6 +919,7 @@ export default function App() {
             isDragging={dragId === id}
             dragY={dragY}
             showHandle={order.length > 1}
+            accent={id === "todaysJobs"}
           >
             {sectionContent[id]}
           </DraggableSection>
