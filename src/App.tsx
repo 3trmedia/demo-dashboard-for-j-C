@@ -638,44 +638,42 @@ function LeadContactRow({ lead }: { lead: Lead }) {
   const ServiceIcon = serviceIcon[lead.service];
   return (
     <div
-      className="flex flex-col gap-1.5 border-b border-neutral-100 py-3 last:border-0"
+      className="flex items-center gap-3 border-b border-neutral-100 py-3 last:border-0"
       style={{ minHeight: LEAD_ROW_HEIGHT }}
     >
-      <div className="flex items-center gap-3">
-        <IconBadge icon={ServiceIcon} box={32} size={16} />
-        <p className="min-w-0 flex-1 truncate font-semibold text-neutral-900">{lead.name}</p>
-        <div className="flex shrink-0 items-center gap-1">
-          <a
-            href={`tel:${lead.phone}`}
-            aria-label={`Call ${lead.name}`}
-            className="flex h-8 w-8 items-center justify-center rounded-full"
-            style={{ backgroundColor: `${ACCENT}1a`, color: ACCENT }}
-          >
-            <PiPhone size={16} />
-          </a>
-          <a
-            href={`sms:${lead.phone}`}
-            aria-label={`Text ${lead.name}`}
-            className="flex h-8 w-8 items-center justify-center rounded-full"
-            style={{ backgroundColor: `${ACCENT}1a`, color: ACCENT }}
-          >
-            <PiChatCircleText size={16} />
-          </a>
-          <a
-            href={`mailto:${lead.email}`}
-            aria-label={`Email ${lead.name}`}
-            className="flex h-8 w-8 items-center justify-center rounded-full"
-            style={{ backgroundColor: `${ACCENT}1a`, color: ACCENT }}
-          >
-            <PiEnvelopeSimple size={16} />
-          </a>
-        </div>
-      </div>
-      <div className="flex items-center justify-between gap-2 pl-11">
+      <IconBadge icon={ServiceIcon} box={32} size={16} />
+      <div className="min-w-0 flex-1">
+        <p className="truncate font-semibold text-neutral-900">{lead.name}</p>
         <p className="truncate text-xs text-neutral-400">
           {formatShortDate(lead.receivedDate)} · {lead.service}
         </p>
-        <StageDots stage={lead.stage} />
+      </div>
+      <StageDots stage={lead.stage} />
+      <div className="flex shrink-0 items-center gap-1">
+        <a
+          href={`tel:${lead.phone}`}
+          aria-label={`Call ${lead.name}`}
+          className="flex h-8 w-8 items-center justify-center rounded-full"
+          style={{ backgroundColor: `${ACCENT}1a`, color: ACCENT }}
+        >
+          <PiPhone size={16} />
+        </a>
+        <a
+          href={`sms:${lead.phone}`}
+          aria-label={`Text ${lead.name}`}
+          className="flex h-8 w-8 items-center justify-center rounded-full"
+          style={{ backgroundColor: `${ACCENT}1a`, color: ACCENT }}
+        >
+          <PiChatCircleText size={16} />
+        </a>
+        <a
+          href={`mailto:${lead.email}`}
+          aria-label={`Email ${lead.name}`}
+          className="flex h-8 w-8 items-center justify-center rounded-full"
+          style={{ backgroundColor: `${ACCENT}1a`, color: ACCENT }}
+        >
+          <PiEnvelopeSimple size={16} />
+        </a>
       </div>
     </div>
   );
