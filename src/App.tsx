@@ -1,10 +1,19 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import jcLogo from "./assets/jc-logo-horizontal.png";
 
 type JobStatus = "Booked" | "In Progress" | "Done";
 type Service = "Driveway" | "Sealcoat" | "Parking Lot";
 type ClosedBy = "Jeffrey" | "Alex (Sales Rep)" | null;
 type JobDate = "Today" | "Tomorrow" | "Wed" | "Thu" | "Fri";
+type LeadStage = "Needs Visit" | "Needs Call";
+
+interface Lead {
+  id: number;
+  name: string;
+  stage: LeadStage;
+  reason: string;
+  service: Service;
+}
 
 interface Job {
   id: number;
@@ -30,6 +39,44 @@ const serviceIcon: Record<Service, string> = {
   Sealcoat: "🛢️",
   "Parking Lot": "🅿️",
 };
+
+const initialLeads: Lead[] = [
+  {
+    id: 101,
+    name: "Mercer Property Mgmt",
+    stage: "Needs Visit",
+    reason: "Large parking lot bid — wants a walkthrough before signing",
+    service: "Parking Lot",
+  },
+  {
+    id: 102,
+    name: "Deborah Hale",
+    stage: "Needs Visit",
+    reason: "Asked to see finish samples in person",
+    service: "Driveway",
+  },
+  {
+    id: 103,
+    name: "Tyler Combs",
+    stage: "Needs Call",
+    reason: "Quoted 6 days ago, hasn't responded",
+    service: "Sealcoat",
+  },
+  {
+    id: 104,
+    name: "Nancy Ruiz",
+    stage: "Needs Call",
+    reason: "Said she needs to check with her husband",
+    service: "Driveway",
+  },
+  {
+    id: 105,
+    name: "Pete Alvarado",
+    stage: "Needs Call",
+    reason: "Requested a callback, missed twice",
+    service: "Driveway",
+  },
+];
 
 const initialJobs: Job[] = [
   {
@@ -78,17 +125,6 @@ const initialJobs: Job[] = [
   },
   {
     id: 5,
-    customer: "Mercer Property Mgmt",
-    service: "Parking Lot",
-    status: "In Progress",
-    date: "Wed",
-    filmed: false,
-    closedBy: "Jeffrey",
-    serviced: false,
-    paid: false,
-  },
-  {
-    id: 6,
     customer: "Ray Ostergaard",
     service: "Sealcoat",
     status: "Done",
@@ -132,8 +168,43 @@ const weekBars: { day: string; count: number; isToday: boolean }[] = [
   { day: "Sa", count: 0, isToday: false },
 ];
 
+const SECTION_TITLES: Record<string, string> = {
+  needsVisit: "Needs a Visit",
+  needsCall: "Needs a Call",
+  pulse: "Pulse",
+  todaysJobs: "Today's Jobs",
+  upcomingJobs: "Upcoming Jobs",
+  activity: "Recent Activity",
+};
+
+const DEFAULT_ORDER = [
+  "needsVisit",
+  "needsCall",
+  "pulse",
+  "todaysJobs",
+  "upcomingJobs",
+  "activity",
+];
+
+const DEFAULT_COLLAPSED: Record<string, boolean> = {
+  upcomingJobs: true,
+};
+
+const HOLD_MS = 350;
+const MOVE_CANCEL_PX = 8;
+
 function firstName(name: string) {
   return name.split(" ")[0];
+}
+
+function loadJSON<T>(key: string, fallback: T): T {
+  try {
+    const saved = localStorage.getItem(key);
+    if (saved) return JSON.parse(saved) as T;
+  } catch {
+    // ignore — fall back to default
+  }
+  return fallback;
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -261,19 +332,235 @@ function JobCard({
   );
 }
 
+function LeadRow({
+  lead,
+  primaryLabel,
+  onPrimary,
+  onCloseAndBook,
+}: {
+  lead: Lead;
+  primaryLabel: string;
+  onPrimary: () => void;
+  onCloseAndBook: () => void;
+}) {
+  return (
+    <div className="rounded-xl border border-neutral-100 bg-white p-4">
+      <div className="flex items-start gap-2">
+        <span className="text-xl leading-none">{serviceIcon[lead.service]}</span>
+        <div>
+          <p className="font-semibold text-neutral-900">{lead.name}</p>
+          <p className="text-sm text-neutral-500">{lead.reason}</p>
+        </div>
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <button
+          onClick={onPrimary}
+          className="rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-600"
+        >
+          {primaryLabel}
+        </button>
+        <button
+          onClick={onCloseAndBook}
+          className="rounded-full border px-3 py-1.5 text-xs font-medium"
+          style={{ borderColor: `${ACCENT}66`, backgroundColor: `${ACCENT}1a`, color: ACCENT }}
+        >
+          ✓ Close &amp; book
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function DraggableSection({
+  title,
+  badge,
+  collapsed,
+  onToggleCollapsed,
+  onHandlePointerDown,
+  onHandlePointerMove,
+  onHandlePointerUp,
+  registerRef,
+  isDragging,
+  dragY,
+  children,
+}: {
+  title: string;
+  badge?: React.ReactNode;
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
+  onHandlePointerDown: (e: React.PointerEvent) => void;
+  onHandlePointerMove: (e: React.PointerEvent) => void;
+  onHandlePointerUp: (e: React.PointerEvent) => void;
+  registerRef: (el: HTMLDivElement | null) => void;
+  isDragging: boolean;
+  dragY: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      ref={registerRef}
+      className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-neutral-100"
+      style={{
+        transform: isDragging ? `translateY(${dragY}px) scale(1.02)` : undefined,
+        boxShadow: isDragging ? "0 16px 28px rgba(0,0,0,0.16)" : undefined,
+        position: "relative",
+        zIndex: isDragging ? 10 : undefined,
+        transition: isDragging ? "none" : "transform 150ms ease",
+      }}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <button
+          onClick={onToggleCollapsed}
+          className="flex flex-1 items-center gap-2 text-left"
+        >
+          <span
+            className="inline-block text-neutral-400 transition-transform"
+            style={{ transform: collapsed ? "rotate(-90deg)" : "rotate(0deg)" }}
+          >
+            ▾
+          </span>
+          <SectionLabel>{title}</SectionLabel>
+        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          {badge}
+          <span
+            onPointerDown={onHandlePointerDown}
+            onPointerMove={onHandlePointerMove}
+            onPointerUp={onHandlePointerUp}
+            onPointerCancel={onHandlePointerUp}
+            onContextMenu={(e) => e.preventDefault()}
+            className="cursor-grab select-none rounded px-2 py-1 text-base leading-none text-neutral-300 active:cursor-grabbing"
+            style={{ touchAction: "none" }}
+          >
+            ⠿
+          </span>
+        </div>
+      </div>
+      {!collapsed && <div className="mt-4">{children}</div>}
+    </div>
+  );
+}
+
 export default function App() {
+  const [leads, setLeads] = useState<Lead[]>(initialLeads);
   const [jobs, setJobs] = useState<Job[]>(initialJobs);
   const [activity, setActivity] = useState<ActivityItem[]>(initialActivity);
-  const [expanded, setExpanded] = useState(false);
+
+  const [order, setOrder] = useState<string[]>(() => loadJSON("jc-section-order", DEFAULT_ORDER));
+  const [collapsedMap, setCollapsedMap] = useState<Record<string, boolean>>(() =>
+    loadJSON("jc-section-collapsed", DEFAULT_COLLAPSED),
+  );
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("jc-section-order", JSON.stringify(order));
+    } catch {
+      // ignore — order just won't persist this session
+    }
+  }, [order]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("jc-section-collapsed", JSON.stringify(collapsedMap));
+    } catch {
+      // ignore — collapse state just won't persist this session
+    }
+  }, [collapsedMap]);
+
+  const sectionRefs = useRef<Partial<Record<string, HTMLDivElement>>>({});
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dragY, setDragY] = useState(0);
+  const dragState = useRef<{
+    startY: number;
+    holdTimer: number | null;
+    holding: boolean;
+  } | null>(null);
+
+  function toggleCollapsed(id: string) {
+    setCollapsedMap((prev) => ({ ...prev, [id]: !prev[id] }));
+  }
+
+  function handlePointerDown(id: string) {
+    return (e: React.PointerEvent) => {
+      const state = { startY: e.clientY, holdTimer: null as number | null, holding: false };
+      dragState.current = state;
+      const pointerId = e.pointerId;
+      const target = e.currentTarget;
+      state.holdTimer = window.setTimeout(() => {
+        state.holding = true;
+        setDragId(id);
+        try {
+          target.setPointerCapture(pointerId);
+        } catch {
+          // capture is a nice-to-have; dragging still works without it
+        }
+      }, HOLD_MS);
+    };
+  }
+
+  function handlePointerMove(id: string) {
+    return (e: React.PointerEvent) => {
+      const state = dragState.current;
+      if (!state) return;
+      const delta = e.clientY - state.startY;
+
+      if (!state.holding) {
+        if (Math.abs(delta) > MOVE_CANCEL_PX && state.holdTimer) {
+          clearTimeout(state.holdTimer);
+          state.holdTimer = null;
+        }
+        return;
+      }
+
+      setDragY(delta);
+      const idx = order.indexOf(id);
+
+      if (delta < 0 && idx > 0) {
+        const aboveEl = sectionRefs.current[order[idx - 1]];
+        if (aboveEl) {
+          const rect = aboveEl.getBoundingClientRect();
+          if (e.clientY < rect.top + rect.height / 2) {
+            const newOrder = [...order];
+            [newOrder[idx - 1], newOrder[idx]] = [newOrder[idx], newOrder[idx - 1]];
+            setOrder(newOrder);
+            state.startY = e.clientY;
+            setDragY(0);
+          }
+        }
+      } else if (delta > 0 && idx < order.length - 1) {
+        const belowEl = sectionRefs.current[order[idx + 1]];
+        if (belowEl) {
+          const rect = belowEl.getBoundingClientRect();
+          if (e.clientY > rect.top + rect.height / 2) {
+            const newOrder = [...order];
+            [newOrder[idx + 1], newOrder[idx]] = [newOrder[idx], newOrder[idx + 1]];
+            setOrder(newOrder);
+            state.startY = e.clientY;
+            setDragY(0);
+          }
+        }
+      }
+    };
+  }
+
+  function handlePointerUp(id: string) {
+    return () => {
+      const state = dragState.current;
+      if (state?.holdTimer) clearTimeout(state.holdTimer);
+      dragState.current = null;
+      if (dragId === id) {
+        setDragId(null);
+        setDragY(0);
+      }
+    };
+  }
 
   function logActivity(icon: string, text: string) {
     setActivity((prev) => [{ icon, text }, ...prev].slice(0, 12));
   }
 
   function updateJob(id: number, changes: Partial<Job>) {
-    setJobs((prev) =>
-      prev.map((job) => (job.id === id ? { ...job, ...changes } : job)),
-    );
+    setJobs((prev) => prev.map((job) => (job.id === id ? { ...job, ...changes } : job)));
   }
 
   function handleClosedBy(job: Job, value: string) {
@@ -300,6 +587,41 @@ export default function App() {
     }
   }
 
+  function markVisited(lead: Lead) {
+    setLeads((prev) =>
+      prev.map((l) =>
+        l.id === lead.id ? { ...l, stage: "Needs Call", reason: "Visited — following up by phone" } : l,
+      ),
+    );
+    logActivity("🚗", `Jeffrey visited ${firstName(lead.name)}`);
+  }
+
+  function markCalled(lead: Lead) {
+    logActivity("📞", `Jeffrey called ${firstName(lead.name)}`);
+  }
+
+  function closeAndBook(lead: Lead) {
+    setLeads((prev) => prev.filter((l) => l.id !== lead.id));
+    setJobs((prev) => [
+      {
+        id: Date.now(),
+        customer: lead.name,
+        service: lead.service,
+        status: "Booked",
+        date: "Tomorrow",
+        filmed: false,
+        closedBy: "Jeffrey",
+        serviced: false,
+        paid: false,
+      },
+      ...prev,
+    ]);
+    logActivity("🤝", `Jeffrey closed ${firstName(lead.name)}'s ${lead.service.toLowerCase()} job`);
+  }
+
+  const needsVisit = leads.filter((l) => l.stage === "Needs Visit");
+  const needsCall = leads.filter((l) => l.stage === "Needs Call");
+
   const leadCounts = { New: 2, Contacted: 1, Booked: 2, Done: 1 };
   const totalLeads = Object.values(leadCounts).reduce((a, b) => a + b, 0);
   const leadPillColor: Record<keyof typeof leadCounts, string> = {
@@ -313,6 +635,171 @@ export default function App() {
   const maxBar = Math.max(...weekBars.map((b) => b.count), 1);
   const totalSourceLeads = leadSources.reduce((sum, s) => sum + s.value, 0);
 
+  const sectionBadge: Record<string, React.ReactNode> = {
+    needsVisit: (
+      <span
+        className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+        style={{ backgroundColor: `${ACCENT}1a`, color: ACCENT }}
+      >
+        {needsVisit.length}
+      </span>
+    ),
+    needsCall: (
+      <span
+        className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+        style={{ backgroundColor: `${ACCENT}1a`, color: ACCENT }}
+      >
+        {needsCall.length}
+      </span>
+    ),
+    todaysJobs: (
+      <span
+        className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+        style={{ backgroundColor: `${ACCENT}1a`, color: ACCENT }}
+      >
+        {todaysJobs.length} to update
+      </span>
+    ),
+    upcomingJobs: <span className="text-sm font-medium text-neutral-400">{jobs.length} jobs</span>,
+  };
+
+  const sectionContent: Record<string, React.ReactNode> = {
+    needsVisit: (
+      <div className="flex flex-col gap-3">
+        {needsVisit.length === 0 && (
+          <p className="text-sm text-neutral-400">Nobody needs an in-person visit right now.</p>
+        )}
+        {needsVisit.map((lead) => (
+          <LeadRow
+            key={lead.id}
+            lead={lead}
+            primaryLabel="Mark visited"
+            onPrimary={() => markVisited(lead)}
+            onCloseAndBook={() => closeAndBook(lead)}
+          />
+        ))}
+      </div>
+    ),
+    needsCall: (
+      <div className="flex flex-col gap-3">
+        {needsCall.length === 0 && (
+          <p className="text-sm text-neutral-400">No leads waiting on a call right now.</p>
+        )}
+        {needsCall.map((lead) => (
+          <LeadRow
+            key={lead.id}
+            lead={lead}
+            primaryLabel="Mark called"
+            onPrimary={() => markCalled(lead)}
+            onCloseAndBook={() => closeAndBook(lead)}
+          />
+        ))}
+      </div>
+    ),
+    pulse: (
+      <div>
+        <p className="text-6xl font-bold tracking-tight text-neutral-900">{totalLeads}</p>
+        <p className="text-xs text-neutral-400">leads this week</p>
+        <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {(Object.keys(leadCounts) as (keyof typeof leadCounts)[]).map((key) => (
+            <div
+              key={key}
+              className="flex items-center justify-between rounded-full border px-3 py-1.5"
+              style={{ borderColor: `${leadPillColor[key]}55` }}
+            >
+              <span className="text-xs font-medium" style={{ color: leadPillColor[key] }}>
+                {key}
+              </span>
+              <span className="text-sm font-semibold text-neutral-900">{leadCounts[key]}</span>
+            </div>
+          ))}
+        </div>
+        <div className="mt-6 flex items-end justify-between gap-2">
+          {weekBars.map((b) => (
+            <div key={b.day} className="flex flex-1 flex-col items-center gap-1.5">
+              <div
+                className="w-full rounded-md"
+                style={{
+                  height: `${8 + (b.count / maxBar) * 32}px`,
+                  backgroundColor: b.isToday ? ACCENT : "#eee9e6",
+                }}
+              />
+              <span className="text-[10px] font-medium text-neutral-400">{b.day}</span>
+            </div>
+          ))}
+        </div>
+
+        <hr className="my-5 border-neutral-100" />
+
+        <p className="text-xs font-semibold uppercase tracking-wide text-neutral-400">
+          Where leads come from
+        </p>
+        <div className="mt-4 flex items-center gap-6">
+          <div className="relative shrink-0">
+            <Donut data={leadSources} />
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <span className="text-2xl font-bold text-neutral-900">{totalSourceLeads}</span>
+              <span className="text-[10px] uppercase text-neutral-400">leads</span>
+            </div>
+          </div>
+          <ul className="flex flex-1 flex-col gap-2">
+            {leadSources.map((s) => (
+              <li key={s.label} className="flex items-center justify-between text-sm">
+                <span className="flex items-center gap-2 text-neutral-600">
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: s.color }} />
+                  {s.label}
+                </span>
+                <span className="font-semibold text-neutral-900">{s.value}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    ),
+    todaysJobs: (
+      <div className="flex flex-col gap-3">
+        {todaysJobs.length === 0 && (
+          <p className="text-sm text-neutral-400">No jobs scheduled for today.</p>
+        )}
+        {todaysJobs.map((job) => (
+          <JobCard
+            key={job.id}
+            job={job}
+            compact
+            onClosedBy={(v) => handleClosedBy(job, v)}
+            onToggleServiced={() => toggleServiced(job)}
+            onTogglePaid={() => togglePaid(job)}
+          />
+        ))}
+      </div>
+    ),
+    upcomingJobs: (
+      <div className="flex flex-col gap-3">
+        {jobs.map((job) => (
+          <JobCard
+            key={job.id}
+            job={job}
+            onClosedBy={(v) => handleClosedBy(job, v)}
+            onToggleServiced={() => toggleServiced(job)}
+            onTogglePaid={() => togglePaid(job)}
+          />
+        ))}
+      </div>
+    ),
+    activity: (
+      <ul className="flex flex-col gap-3">
+        {activity.map((item, i) => (
+          <li key={`${item.text}-${i}`} className="flex items-center gap-3 text-sm text-neutral-700">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-neutral-50 text-sm">
+              {item.icon}
+            </span>
+            <span>{item.text}</span>
+          </li>
+        ))}
+      </ul>
+    ),
+  };
+
   return (
     <div className="min-h-screen bg-[#faf9f7] pb-12">
       <header className="flex items-center justify-between border-b border-neutral-100 bg-white px-5 py-4">
@@ -325,146 +812,25 @@ export default function App() {
       </header>
 
       <main className="mx-auto flex max-w-2xl flex-col gap-6 px-4 pt-6">
-        {/* LEADS THIS WEEK */}
-        <section className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-neutral-100">
-          <SectionLabel>Leads This Week</SectionLabel>
-          <p className="mt-1 text-6xl font-bold tracking-tight text-neutral-900">
-            {totalLeads}
-          </p>
-          <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {(Object.keys(leadCounts) as (keyof typeof leadCounts)[]).map((key) => (
-              <div
-                key={key}
-                className="flex items-center justify-between rounded-full border px-3 py-1.5"
-                style={{ borderColor: `${leadPillColor[key]}55` }}
-              >
-                <span className="text-xs font-medium" style={{ color: leadPillColor[key] }}>
-                  {key}
-                </span>
-                <span className="text-sm font-semibold text-neutral-900">
-                  {leadCounts[key]}
-                </span>
-              </div>
-            ))}
-          </div>
-          <div className="mt-6 flex items-end justify-between gap-2">
-            {weekBars.map((b) => (
-              <div key={b.day} className="flex flex-1 flex-col items-center gap-1.5">
-                <div
-                  className="w-full rounded-md"
-                  style={{
-                    height: `${8 + (b.count / maxBar) * 32}px`,
-                    backgroundColor: b.isToday ? ACCENT : "#eee9e6",
-                  }}
-                />
-                <span className="text-[10px] font-medium text-neutral-400">{b.day}</span>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* TODAY'S JOBS */}
-        <section className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-neutral-100">
-          <div className="flex items-center justify-between">
-            <SectionLabel>Today's Jobs</SectionLabel>
-            <span
-              className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
-              style={{ backgroundColor: `${ACCENT}1a`, color: ACCENT }}
-            >
-              {todaysJobs.length} to update
-            </span>
-          </div>
-          <div className="mt-4 flex flex-col gap-3">
-            {todaysJobs.length === 0 && (
-              <p className="text-sm text-neutral-400">No jobs scheduled for today.</p>
-            )}
-            {todaysJobs.map((job) => (
-              <JobCard
-                key={job.id}
-                job={job}
-                compact
-                onClosedBy={(v) => handleClosedBy(job, v)}
-                onToggleServiced={() => toggleServiced(job)}
-                onTogglePaid={() => togglePaid(job)}
-              />
-            ))}
-          </div>
-        </section>
-
-        {/* UPCOMING JOBS (collapsible) */}
-        <section className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-neutral-100">
-          <button
-            onClick={() => setExpanded((e) => !e)}
-            className="flex w-full items-center justify-between"
+        {order.map((id) => (
+          <DraggableSection
+            key={id}
+            title={SECTION_TITLES[id]}
+            badge={sectionBadge[id]}
+            collapsed={!!collapsedMap[id]}
+            onToggleCollapsed={() => toggleCollapsed(id)}
+            onHandlePointerDown={handlePointerDown(id)}
+            onHandlePointerMove={handlePointerMove(id)}
+            onHandlePointerUp={handlePointerUp(id)}
+            registerRef={(el) => {
+              sectionRefs.current[id] = el ?? undefined;
+            }}
+            isDragging={dragId === id}
+            dragY={dragY}
           >
-            <SectionLabel>Upcoming Jobs</SectionLabel>
-            <span className="flex items-center gap-1 text-sm font-medium text-neutral-400">
-              {jobs.length} jobs
-              <span
-                className="ml-1 inline-block transition-transform"
-                style={{ transform: expanded ? "rotate(180deg)" : "rotate(0deg)" }}
-              >
-                ▾
-              </span>
-            </span>
-          </button>
-          {expanded && (
-            <div className="mt-4 flex flex-col gap-3">
-              {jobs.map((job) => (
-                <JobCard
-                  key={job.id}
-                  job={job}
-                  onClosedBy={(v) => handleClosedBy(job, v)}
-                  onToggleServiced={() => toggleServiced(job)}
-                  onTogglePaid={() => togglePaid(job)}
-                />
-              ))}
-            </div>
-          )}
-        </section>
-
-        {/* LEAD SOURCE */}
-        <section className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-neutral-100">
-          <SectionLabel>Where Leads Come From</SectionLabel>
-          <div className="mt-4 flex items-center gap-6">
-            <div className="relative shrink-0">
-              <Donut data={leadSources} />
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-2xl font-bold text-neutral-900">{totalSourceLeads}</span>
-                <span className="text-[10px] uppercase text-neutral-400">leads</span>
-              </div>
-            </div>
-            <ul className="flex flex-1 flex-col gap-2">
-              {leadSources.map((s) => (
-                <li key={s.label} className="flex items-center justify-between text-sm">
-                  <span className="flex items-center gap-2 text-neutral-600">
-                    <span
-                      className="h-2.5 w-2.5 shrink-0 rounded-full"
-                      style={{ backgroundColor: s.color }}
-                    />
-                    {s.label}
-                  </span>
-                  <span className="font-semibold text-neutral-900">{s.value}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </section>
-
-        {/* RECENT ACTIVITY */}
-        <section className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-neutral-100">
-          <SectionLabel>Recent Activity</SectionLabel>
-          <ul className="mt-4 flex flex-col gap-3">
-            {activity.map((item, i) => (
-              <li key={`${item.text}-${i}`} className="flex items-center gap-3 text-sm text-neutral-700">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-neutral-50 text-sm">
-                  {item.icon}
-                </span>
-                <span>{item.text}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
+            {sectionContent[id]}
+          </DraggableSection>
+        ))}
       </main>
     </div>
   );
