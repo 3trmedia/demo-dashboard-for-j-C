@@ -310,7 +310,17 @@ const STAGE_COLOR: Record<LeadStage, string> = {
   "Needs Call": ACCENT,
 };
 
-const LEAD_ROW_HEIGHT = 76;
+/** Needs Visit/Needs Call are parallel branches, not sequential — both count as the same "Following Up" step. */
+const STAGE_STEP: Record<LeadStage, number> = {
+  New: 0,
+  Contacted: 1,
+  Quoted: 2,
+  "Needs Visit": 3,
+  "Needs Call": 3,
+};
+const STAGE_STEP_LABELS = ["New", "Contacted", "Quoted", "Following Up", "Booked"];
+
+const LEAD_ROW_HEIGHT = 84;
 const LEAD_LIST_VISIBLE_ROWS = 5;
 
 type PageId = "todo" | "leads" | "jobs";
@@ -389,6 +399,81 @@ function SectionLabel({
   );
 }
 
+function IconBadge({ icon: Icon, size = 20, box = 36 }: { icon: IconType; size?: number; box?: number }) {
+  return (
+    <span
+      className="flex shrink-0 items-center justify-center rounded-full"
+      style={{ width: box, height: box, backgroundColor: `${ACCENT}1a`, color: ACCENT }}
+    >
+      <Icon size={size} />
+    </span>
+  );
+}
+
+function MiniRing({
+  value,
+  total,
+  size = 32,
+}: {
+  value: number;
+  total: number;
+  size?: number;
+}) {
+  const strokeWidth = 4;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const fraction = total === 0 ? 0 : value / total;
+  const dash = fraction * circumference;
+  return (
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <svg viewBox={`0 0 ${size} ${size}`} className="-rotate-90" style={{ width: size, height: size }}>
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke="rgba(255,255,255,0.3)"
+          strokeWidth={strokeWidth}
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke="white"
+          strokeWidth={strokeWidth}
+          strokeDasharray={`${dash} ${circumference - dash}`}
+          strokeLinecap="round"
+        />
+      </svg>
+      <div className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-white">
+        {value}/{total}
+      </div>
+    </div>
+  );
+}
+
+function StageDots({ stage }: { stage: LeadStage }) {
+  const index = STAGE_STEP[stage];
+  const color = STAGE_COLOR[stage];
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <div className="flex items-center gap-1">
+        {STAGE_STEP_LABELS.map((_, i) => (
+          <span
+            key={i}
+            className="h-1.5 w-1.5 rounded-full"
+            style={{ backgroundColor: i <= index ? color : "#e5e4e2" }}
+          />
+        ))}
+      </div>
+      <span className="text-[10px] font-semibold" style={{ color }}>
+        {stage}
+      </span>
+    </div>
+  );
+}
+
 function Donut({ data }: { data: { label: string; value: number; color: string }[] }) {
   const total = data.reduce((sum, d) => sum + d.value, 0);
   const radius = 40;
@@ -442,7 +527,7 @@ function JobCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2">
-          <ServiceIcon size={20} className="shrink-0 text-neutral-500" />
+          <IconBadge icon={ServiceIcon} />
           <div>
             <p className="font-semibold text-neutral-900">{job.customer}</p>
             <p className="text-sm text-neutral-500">{job.service}</p>
@@ -456,7 +541,7 @@ function JobCard({
       </div>
 
       <div className="mt-3 flex items-center gap-1.5 text-sm text-neutral-500">
-        <PiVideoCamera size={16} />
+        <PiVideoCamera size={16} style={{ color: job.filmed ? ACCENT : undefined }} />
         <span>{job.filmed ? "Filmed" : "Not filmed"}</span>
         {!compact && <span className="text-neutral-300">•</span>}
         {!compact && <span>{formatShortDate(job.date)}</span>}
@@ -523,7 +608,7 @@ function LeadRow({
   return (
     <div className="rounded-xl border border-neutral-100 bg-white p-4">
       <div className="flex items-start gap-2">
-        <ServiceIcon size={20} className="mt-0.5 shrink-0 text-neutral-500" />
+        <IconBadge icon={ServiceIcon} />
         <div>
           <p className="font-semibold text-neutral-900">{lead.name}</p>
           <p className="text-sm text-neutral-500">{lead.reason}</p>
@@ -553,44 +638,44 @@ function LeadContactRow({ lead }: { lead: Lead }) {
   const ServiceIcon = serviceIcon[lead.service];
   return (
     <div
-      className="flex items-center gap-3 border-b border-neutral-100 py-3 last:border-0"
+      className="flex flex-col gap-1.5 border-b border-neutral-100 py-3 last:border-0"
       style={{ minHeight: LEAD_ROW_HEIGHT }}
     >
-      <ServiceIcon size={20} className="shrink-0 text-neutral-500" />
-      <div className="min-w-0 flex-1">
-        <p className="truncate font-semibold text-neutral-900">{lead.name}</p>
+      <div className="flex items-center gap-3">
+        <IconBadge icon={ServiceIcon} box={32} size={16} />
+        <p className="min-w-0 flex-1 truncate font-semibold text-neutral-900">{lead.name}</p>
+        <div className="flex shrink-0 items-center gap-1">
+          <a
+            href={`tel:${lead.phone}`}
+            aria-label={`Call ${lead.name}`}
+            className="flex h-8 w-8 items-center justify-center rounded-full"
+            style={{ backgroundColor: `${ACCENT}1a`, color: ACCENT }}
+          >
+            <PiPhone size={16} />
+          </a>
+          <a
+            href={`sms:${lead.phone}`}
+            aria-label={`Text ${lead.name}`}
+            className="flex h-8 w-8 items-center justify-center rounded-full"
+            style={{ backgroundColor: `${ACCENT}1a`, color: ACCENT }}
+          >
+            <PiChatCircleText size={16} />
+          </a>
+          <a
+            href={`mailto:${lead.email}`}
+            aria-label={`Email ${lead.name}`}
+            className="flex h-8 w-8 items-center justify-center rounded-full"
+            style={{ backgroundColor: `${ACCENT}1a`, color: ACCENT }}
+          >
+            <PiEnvelopeSimple size={16} />
+          </a>
+        </div>
+      </div>
+      <div className="flex items-center justify-between gap-2 pl-11">
         <p className="truncate text-xs text-neutral-400">
           {formatShortDate(lead.receivedDate)} · {lead.service}
         </p>
-      </div>
-      <span
-        className="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold"
-        style={{ backgroundColor: `${STAGE_COLOR[lead.stage]}1a`, color: STAGE_COLOR[lead.stage] }}
-      >
-        {lead.stage}
-      </span>
-      <div className="flex shrink-0 items-center gap-1">
-        <a
-          href={`tel:${lead.phone}`}
-          aria-label={`Call ${lead.name}`}
-          className="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-50 text-neutral-500"
-        >
-          <PiPhone size={16} />
-        </a>
-        <a
-          href={`sms:${lead.phone}`}
-          aria-label={`Text ${lead.name}`}
-          className="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-50 text-neutral-500"
-        >
-          <PiChatCircleText size={16} />
-        </a>
-        <a
-          href={`mailto:${lead.email}`}
-          aria-label={`Email ${lead.name}`}
-          className="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-50 text-neutral-500"
-        >
-          <PiEnvelopeSimple size={16} />
-        </a>
+        <StageDots stage={lead.stage} />
       </div>
     </div>
   );
@@ -726,7 +811,7 @@ function MonthCalendar({ jobs }: { jobs: Job[] }) {
                   key={job.id}
                   className="flex items-center gap-2 rounded-xl border border-neutral-100 bg-neutral-50/60 p-3"
                 >
-                  <ServiceIcon size={18} className="shrink-0 text-neutral-500" />
+                  <IconBadge icon={ServiceIcon} box={32} size={16} />
                   <div className="flex-1">
                     <p className="text-sm font-medium text-neutral-900">{job.customer}</p>
                     <p className="text-xs text-neutral-500">{job.service}</p>
@@ -1034,7 +1119,9 @@ export default function App() {
     Done: "#2f6f4f",
   };
 
-  const todaysJobs = jobs.filter((j) => j.date === TODAY_ISO).slice(0, 3);
+  const todaysJobsAll = jobs.filter((j) => j.date === TODAY_ISO);
+  const todaysJobs = todaysJobsAll.slice(0, 3);
+  const todaysDoneCount = todaysJobsAll.filter((j) => j.status === "Done").length;
   const maxBar = Math.max(...weekBars.map((b) => b.count), 1);
   const totalSourceLeads = leadSources.reduce((sum, s) => sum + s.value, 0);
 
@@ -1055,11 +1142,8 @@ export default function App() {
         {needsCall.length}
       </span>
     ),
-    todaysJobs: (
-      <span className="rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-semibold text-white">
-        {todaysJobs.length} to update
-      </span>
-    ),
+    todaysJobs:
+      todaysJobsAll.length > 0 ? <MiniRing value={todaysDoneCount} total={todaysJobsAll.length} /> : null,
     upcomingJobs: <span className="text-sm font-medium text-neutral-400">{jobs.length} jobs</span>,
     allLeads: <span className="text-sm font-medium text-neutral-400">{leadsByDate.length}</span>,
   };
@@ -1190,6 +1274,14 @@ export default function App() {
     monthCalendar: <MonthCalendar jobs={jobs} />,
     allLeads: (
       <div>
+        <p className="mb-3 flex flex-wrap items-center gap-x-1.5 text-[11px] text-neutral-400">
+          {STAGE_STEP_LABELS.map((label, i) => (
+            <span key={label} className="flex items-center gap-1.5">
+              {label}
+              {i < STAGE_STEP_LABELS.length - 1 && <PiCaretRight size={10} />}
+            </span>
+          ))}
+        </p>
         <div
           className="overflow-y-auto"
           style={{ maxHeight: LEAD_ROW_HEIGHT * LEAD_LIST_VISIBLE_ROWS }}
@@ -1207,9 +1299,7 @@ export default function App() {
       <ul className="flex flex-col gap-3">
         {activity.map((item, i) => (
           <li key={`${item.text}-${i}`} className="flex items-center gap-3 text-sm text-neutral-700">
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-neutral-50 text-neutral-500">
-              <item.icon size={16} />
-            </span>
+            <IconBadge icon={item.icon} box={28} size={15} />
             <span>{item.text}</span>
           </li>
         ))}
