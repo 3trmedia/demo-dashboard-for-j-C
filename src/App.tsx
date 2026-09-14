@@ -288,7 +288,6 @@ const SECTION_TITLES: Record<string, string> = {
   needsCall: "Needs a Call",
   pulse: "Overview",
   allLeads: "All Leads",
-  rowLayoutPreview: "Row Layout Preview (temporary)",
   todaysJobs: "Today's Jobs",
   upcomingJobs: "Upcoming Jobs",
   monthCalendar: "Job Calendar",
@@ -326,7 +325,7 @@ const PAGES: { id: PageId; label: string; icon: IconType }[] = [
 
 const DEFAULT_ORDER: Record<PageId, string[]> = {
   todo: ["todaysJobs", "needsVisit", "needsCall"],
-  leads: ["pulse", "allLeads", "rowLayoutPreview", "activity"],
+  leads: ["pulse", "allLeads", "activity"],
   jobs: ["upcomingJobs", "monthCalendar"],
 };
 
@@ -655,7 +654,7 @@ function LeadContactIcons({ lead }: { lead: Lead }) {
   );
 }
 
-function LeadContactRow({ lead, iconsFirst = false }: { lead: Lead; iconsFirst?: boolean }) {
+function LeadContactRow({ lead }: { lead: Lead }) {
   const ServiceIcon = serviceIcon[lead.service];
   return (
     <div
@@ -669,17 +668,8 @@ function LeadContactRow({ lead, iconsFirst = false }: { lead: Lead; iconsFirst?:
           {formatShortDate(lead.receivedDate)} · {lead.service}
         </p>
       </div>
-      {iconsFirst ? (
-        <>
-          <LeadContactIcons lead={lead} />
-          <StageDots stage={lead.stage} />
-        </>
-      ) : (
-        <>
-          <StageDots stage={lead.stage} />
-          <LeadContactIcons lead={lead} />
-        </>
-      )}
+      <StageDots stage={lead.stage} />
+      <LeadContactIcons lead={lead} />
     </div>
   );
 }
@@ -1295,29 +1285,6 @@ export default function App() {
         <p className="mt-3 text-center text-xs text-neutral-400">
           {leadsByDate.length} leads · scroll for more
         </p>
-      </div>
-    ),
-    rowLayoutPreview: leadsByDate[0] && (
-      <div className="flex flex-col gap-4">
-        <p className="text-sm text-neutral-500">
-          Same row, two orderings. Tell me which to keep and I'll delete the other.
-        </p>
-        <div>
-          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-400">
-            A. Dots then icons (current)
-          </p>
-          <div className="rounded-xl border border-neutral-100">
-            <LeadContactRow lead={leadsByDate[0]} />
-          </div>
-        </div>
-        <div>
-          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-400">
-            B. Icons then dots
-          </p>
-          <div className="rounded-xl border border-neutral-100">
-            <LeadContactRow lead={leadsByDate[0]} iconsFirst />
-          </div>
-        </div>
       </div>
     ),
     activity: (
