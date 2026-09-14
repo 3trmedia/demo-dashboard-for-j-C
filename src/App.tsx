@@ -200,14 +200,23 @@ function firstName(name: string) {
   return name.split(" ")[0];
 }
 
-function loadJSON<T>(key: string, fallback: T): T {
+function loadJSON<T>(key: string, fallback: T, isValid?: (value: unknown) => value is T): T {
   try {
     const saved = localStorage.getItem(key);
-    if (saved) return JSON.parse(saved) as T;
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (!isValid || isValid(parsed)) return parsed as T;
+    }
   } catch {
     // ignore — fall back to default
   }
   return fallback;
+}
+
+function isOrdersByPage(value: unknown): value is Record<PageId, string[]> {
+  if (!value || typeof value !== "object") return false;
+  const obj = value as Record<string, unknown>;
+  return (["todo", "leads", "jobs"] as const).every((key) => Array.isArray(obj[key]));
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -455,20 +464,20 @@ export default function App() {
 
   const [page, setPage] = useState<PageId>("todo");
   const [ordersByPage, setOrdersByPage] = useState<Record<PageId, string[]>>(() =>
-    loadJSON("jc-section-order", DEFAULT_ORDER),
+    loadJSON("jc-section-order-v2", DEFAULT_ORDER, isOrdersByPage),
   );
   const [collapsedMap, setCollapsedMap] = useState<Record<string, boolean>>(() =>
     loadJSON("jc-section-collapsed", DEFAULT_COLLAPSED),
   );
 
-  const order = ordersByPage[page];
+  const order = ordersByPage[page] ?? DEFAULT_ORDER[page];
   function setOrder(next: string[]) {
     setOrdersByPage((prev) => ({ ...prev, [page]: next }));
   }
 
   useEffect(() => {
     try {
-      localStorage.setItem("jc-section-order", JSON.stringify(ordersByPage));
+      localStorage.setItem("jc-section-order-v2", JSON.stringify(ordersByPage));
     } catch {
       // ignore — order just won't persist this session
     }
