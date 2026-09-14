@@ -4,7 +4,6 @@ import {
   PiHouse,
   PiDrop,
   PiSquaresFour,
-  PiVideoCamera,
   PiCalendarBlank,
   PiCalendarCheck,
   PiPhone,
@@ -56,7 +55,6 @@ interface Job {
   status: JobStatus;
   /** ISO date (YYYY-MM-DD) */
   date: string;
-  filmed: boolean;
   closedBy: ClosedBy;
   serviced: boolean;
   paid: boolean;
@@ -80,7 +78,7 @@ const initialLeads: Lead[] = [
     id: 101,
     name: "Mercer Property Mgmt",
     stage: "Needs Visit",
-    reason: "Large parking lot bid — wants a walkthrough before signing",
+    reason: "Large parking lot bid, wants a walkthrough before signing",
     service: "Parking Lot",
     receivedDate: addDaysISO(TODAY_ISO, -5),
     phone: "8015550142",
@@ -195,7 +193,6 @@ const initialJobs: Job[] = [
     service: "Driveway",
     status: "Booked",
     date: TODAY_ISO,
-    filmed: false,
     closedBy: "Jeffrey",
     serviced: false,
     paid: false,
@@ -206,7 +203,6 @@ const initialJobs: Job[] = [
     service: "Sealcoat",
     status: "In Progress",
     date: TODAY_ISO,
-    filmed: true,
     closedBy: "Alex (Sales Rep)",
     serviced: false,
     paid: false,
@@ -217,7 +213,6 @@ const initialJobs: Job[] = [
     service: "Parking Lot",
     status: "Done",
     date: TODAY_ISO,
-    filmed: true,
     closedBy: "Jeffrey",
     serviced: true,
     paid: true,
@@ -228,7 +223,6 @@ const initialJobs: Job[] = [
     service: "Driveway",
     status: "Booked",
     date: addDaysISO(TODAY_ISO, 1),
-    filmed: false,
     closedBy: null,
     serviced: false,
     paid: false,
@@ -239,7 +233,6 @@ const initialJobs: Job[] = [
     service: "Sealcoat",
     status: "Done",
     date: addDaysISO(TODAY_ISO, 4),
-    filmed: true,
     closedBy: "Alex (Sales Rep)",
     serviced: true,
     paid: false,
@@ -250,7 +243,6 @@ const initialJobs: Job[] = [
     service: "Parking Lot",
     status: "Booked",
     date: addDaysISO(TODAY_ISO, 9),
-    filmed: false,
     closedBy: "Jeffrey",
     serviced: false,
     paid: false,
@@ -260,7 +252,7 @@ const initialJobs: Job[] = [
 const initialActivity: ActivityItem[] = [
   { icon: PiStar, text: "New 5-star review from Sam" },
   { icon: PiCalendarCheck, text: "Karen booked a driveway job" },
-  { icon: PiPhone, text: "Missed call from Mike — texted back in 8 seconds" },
+  { icon: PiPhone, text: "Missed call from Mike, texted back in 8 seconds" },
   { icon: PiWrench, text: "Doug's sealcoat job marked In Progress" },
   { icon: PiSparkle, text: "New lead: Linda Park requested a quote" },
   { icon: PiCheckCircle, text: "Ray's parking lot job serviced and closed out" },
@@ -296,6 +288,7 @@ const SECTION_TITLES: Record<string, string> = {
   needsCall: "Needs a Call",
   pulse: "Overview",
   allLeads: "All Leads",
+  rowLayoutPreview: "Row Layout Preview (temporary)",
   todaysJobs: "Today's Jobs",
   upcomingJobs: "Upcoming Jobs",
   monthCalendar: "Job Calendar",
@@ -310,7 +303,7 @@ const STAGE_COLOR: Record<LeadStage, string> = {
   "Needs Call": ACCENT,
 };
 
-/** Needs Visit/Needs Call are parallel branches, not sequential — both count as the same "Following Up" step. */
+/** Needs Visit/Needs Call are parallel branches, not sequential; both count as the same "Following Up" step. */
 const STAGE_STEP: Record<LeadStage, number> = {
   New: 0,
   Contacted: 1,
@@ -333,7 +326,7 @@ const PAGES: { id: PageId; label: string; icon: IconType }[] = [
 
 const DEFAULT_ORDER: Record<PageId, string[]> = {
   todo: ["todaysJobs", "needsVisit", "needsCall"],
-  leads: ["pulse", "allLeads", "activity"],
+  leads: ["pulse", "allLeads", "rowLayoutPreview", "activity"],
   jobs: ["upcomingJobs", "monthCalendar"],
 };
 
@@ -370,7 +363,7 @@ function loadJSON<T>(key: string, fallback: T, isValid?: (value: unknown) => val
       if (!isValid || isValid(parsed)) return parsed as T;
     }
   } catch {
-    // ignore — fall back to default
+    // ignore, fall back to default
   }
   return fallback;
 }
@@ -540,12 +533,9 @@ function JobCard({
         </span>
       </div>
 
-      <div className="mt-3 flex items-center gap-1.5 text-sm text-neutral-500">
-        <PiVideoCamera size={16} style={{ color: job.filmed ? ACCENT : undefined }} />
-        <span>{job.filmed ? "Filmed" : "Not filmed"}</span>
-        {!compact && <span className="text-neutral-300">•</span>}
-        {!compact && <span>{formatShortDate(job.date)}</span>}
-      </div>
+      {!compact && (
+        <p className="mt-3 text-sm text-neutral-500">{formatShortDate(job.date)}</p>
+      )}
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <select
@@ -634,7 +624,38 @@ function LeadRow({
   );
 }
 
-function LeadContactRow({ lead }: { lead: Lead }) {
+function LeadContactIcons({ lead }: { lead: Lead }) {
+  return (
+    <div className="flex shrink-0 items-center gap-1">
+      <a
+        href={`tel:${lead.phone}`}
+        aria-label={`Call ${lead.name}`}
+        className="flex h-8 w-8 items-center justify-center rounded-full"
+        style={{ backgroundColor: `${ACCENT}1a`, color: ACCENT }}
+      >
+        <PiPhone size={16} />
+      </a>
+      <a
+        href={`sms:${lead.phone}`}
+        aria-label={`Text ${lead.name}`}
+        className="flex h-8 w-8 items-center justify-center rounded-full"
+        style={{ backgroundColor: `${ACCENT}1a`, color: ACCENT }}
+      >
+        <PiChatCircleText size={16} />
+      </a>
+      <a
+        href={`mailto:${lead.email}`}
+        aria-label={`Email ${lead.name}`}
+        className="flex h-8 w-8 items-center justify-center rounded-full"
+        style={{ backgroundColor: `${ACCENT}1a`, color: ACCENT }}
+      >
+        <PiEnvelopeSimple size={16} />
+      </a>
+    </div>
+  );
+}
+
+function LeadContactRow({ lead, iconsFirst = false }: { lead: Lead; iconsFirst?: boolean }) {
   const ServiceIcon = serviceIcon[lead.service];
   return (
     <div
@@ -648,33 +669,17 @@ function LeadContactRow({ lead }: { lead: Lead }) {
           {formatShortDate(lead.receivedDate)} · {lead.service}
         </p>
       </div>
-      <StageDots stage={lead.stage} />
-      <div className="flex shrink-0 items-center gap-1">
-        <a
-          href={`tel:${lead.phone}`}
-          aria-label={`Call ${lead.name}`}
-          className="flex h-8 w-8 items-center justify-center rounded-full"
-          style={{ backgroundColor: `${ACCENT}1a`, color: ACCENT }}
-        >
-          <PiPhone size={16} />
-        </a>
-        <a
-          href={`sms:${lead.phone}`}
-          aria-label={`Text ${lead.name}`}
-          className="flex h-8 w-8 items-center justify-center rounded-full"
-          style={{ backgroundColor: `${ACCENT}1a`, color: ACCENT }}
-        >
-          <PiChatCircleText size={16} />
-        </a>
-        <a
-          href={`mailto:${lead.email}`}
-          aria-label={`Email ${lead.name}`}
-          className="flex h-8 w-8 items-center justify-center rounded-full"
-          style={{ backgroundColor: `${ACCENT}1a`, color: ACCENT }}
-        >
-          <PiEnvelopeSimple size={16} />
-        </a>
-      </div>
+      {iconsFirst ? (
+        <>
+          <LeadContactIcons lead={lead} />
+          <StageDots stage={lead.stage} />
+        </>
+      ) : (
+        <>
+          <StageDots stage={lead.stage} />
+          <LeadContactIcons lead={lead} />
+        </>
+      )}
     </div>
   );
 }
@@ -800,7 +805,7 @@ function MonthCalendar({ jobs }: { jobs: Job[] }) {
 
             <div className="mt-4 flex flex-col gap-2">
               {selectedJobs.length === 0 && (
-                <p className="text-sm text-neutral-400">Free — no jobs scheduled.</p>
+                <p className="text-sm text-neutral-400">Free, no jobs scheduled.</p>
               )}
               {selectedJobs.map((job) => {
                 const ServiceIcon = serviceIcon[job.service];
@@ -940,7 +945,7 @@ export default function App() {
     try {
       localStorage.setItem("jc-section-order-v3", JSON.stringify(ordersByPage));
     } catch {
-      // ignore — order just won't persist this session
+      // ignore, order just won't persist this session
     }
   }, [ordersByPage]);
 
@@ -948,7 +953,7 @@ export default function App() {
     try {
       localStorage.setItem("jc-section-collapsed", JSON.stringify(collapsedMap));
     } catch {
-      // ignore — collapse state just won't persist this session
+      // ignore, collapse state just won't persist this session
     }
   }, [collapsedMap]);
 
@@ -1075,7 +1080,7 @@ export default function App() {
   function markVisited(lead: Lead) {
     setLeads((prev) =>
       prev.map((l) =>
-        l.id === lead.id ? { ...l, stage: "Needs Call", reason: "Visited — following up by phone" } : l,
+        l.id === lead.id ? { ...l, stage: "Needs Call", reason: "Visited, following up by phone" } : l,
       ),
     );
     logActivity(PiCar, `Jeffrey visited ${firstName(lead.name)}`);
@@ -1094,7 +1099,6 @@ export default function App() {
         service: lead.service,
         status: "Booked",
         date: addDaysISO(TODAY_ISO, 1),
-        filmed: false,
         closedBy: "Jeffrey",
         serviced: false,
         paid: false,
@@ -1291,6 +1295,29 @@ export default function App() {
         <p className="mt-3 text-center text-xs text-neutral-400">
           {leadsByDate.length} leads · scroll for more
         </p>
+      </div>
+    ),
+    rowLayoutPreview: leadsByDate[0] && (
+      <div className="flex flex-col gap-4">
+        <p className="text-sm text-neutral-500">
+          Same row, two orderings. Tell me which to keep and I'll delete the other.
+        </p>
+        <div>
+          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-400">
+            A. Dots then icons (current)
+          </p>
+          <div className="rounded-xl border border-neutral-100">
+            <LeadContactRow lead={leadsByDate[0]} />
+          </div>
+        </div>
+        <div>
+          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-400">
+            B. Icons then dots
+          </p>
+          <div className="rounded-xl border border-neutral-100">
+            <LeadContactRow lead={leadsByDate[0]} iconsFirst />
+          </div>
+        </div>
       </div>
     ),
     activity: (
