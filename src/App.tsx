@@ -1,4 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { IconType } from "react-icons";
+import { LuHouse, LuDroplet, LuSquareParking, LuVideo, LuCalendar } from "react-icons/lu";
+import { FiHome, FiDroplet, FiTruck, FiVideo, FiCalendar } from "react-icons/fi";
+import {
+  HiOutlineHome,
+  HiOutlineBeaker,
+  HiOutlineTruck,
+  HiOutlineVideoCamera,
+  HiOutlineCalendarDays,
+} from "react-icons/hi2";
+import { TbHome, TbDroplet, TbParkingCircle, TbVideo, TbCalendar } from "react-icons/tb";
+import { PiHouse, PiDrop, PiCar, PiVideoCamera, PiCalendar } from "react-icons/pi";
 import jcLogo from "./assets/jc-logo-horizontal.png";
 import { addDaysISO, buildMonthGrid, toISODate } from "./lib/calendarGrid";
 
@@ -272,6 +284,7 @@ const SECTION_TITLES: Record<string, string> = {
   todaysJobs: "Today's Jobs",
   upcomingJobs: "Upcoming Jobs",
   monthCalendar: "Job Calendar",
+  iconPreview: "Icon Style Preview (temporary)",
   activity: "Recent Activity",
 };
 
@@ -286,6 +299,23 @@ const STAGE_COLOR: Record<LeadStage, string> = {
 const LEAD_ROW_HEIGHT = 76;
 const LEAD_LIST_VISIBLE_ROWS = 5;
 
+interface IconPack {
+  name: string;
+  driveway: IconType;
+  sealcoat: IconType;
+  parkingLot: IconType;
+  filmed: IconType;
+  calendar: IconType;
+}
+
+const ICON_PACKS: IconPack[] = [
+  { name: "Lucide", driveway: LuHouse, sealcoat: LuDroplet, parkingLot: LuSquareParking, filmed: LuVideo, calendar: LuCalendar },
+  { name: "Feather", driveway: FiHome, sealcoat: FiDroplet, parkingLot: FiTruck, filmed: FiVideo, calendar: FiCalendar },
+  { name: "Heroicons", driveway: HiOutlineHome, sealcoat: HiOutlineBeaker, parkingLot: HiOutlineTruck, filmed: HiOutlineVideoCamera, calendar: HiOutlineCalendarDays },
+  { name: "Tabler", driveway: TbHome, sealcoat: TbDroplet, parkingLot: TbParkingCircle, filmed: TbVideo, calendar: TbCalendar },
+  { name: "Phosphor", driveway: PiHouse, sealcoat: PiDrop, parkingLot: PiCar, filmed: PiVideoCamera, calendar: PiCalendar },
+];
+
 type PageId = "todo" | "leads" | "jobs";
 
 const PAGES: { id: PageId; label: string; icon: string }[] = [
@@ -297,7 +327,7 @@ const PAGES: { id: PageId; label: string; icon: string }[] = [
 const DEFAULT_ORDER: Record<PageId, string[]> = {
   todo: ["todaysJobs", "needsVisit", "needsCall"],
   leads: ["pulse", "allLeads", "activity"],
-  jobs: ["upcomingJobs", "monthCalendar"],
+  jobs: ["upcomingJobs", "monthCalendar", "iconPreview"],
 };
 
 /** Keep ids still valid, drop stale ones, and append any newly-added default sections. */
@@ -557,6 +587,34 @@ function LeadContactRow({ lead }: { lead: Lead }) {
         >
           ✉️
         </a>
+      </div>
+    </div>
+  );
+}
+
+function IconPackRow({ pack }: { pack: IconPack }) {
+  const items: { label: string; Icon: IconType }[] = [
+    { label: "Driveway", Icon: pack.driveway },
+    { label: "Sealcoat", Icon: pack.sealcoat },
+    { label: "Parking", Icon: pack.parkingLot },
+    { label: "Filmed", Icon: pack.filmed },
+    { label: "Calendar", Icon: pack.calendar },
+  ];
+  return (
+    <div className="rounded-xl border border-neutral-100 bg-white p-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-neutral-400">{pack.name}</p>
+      <div className="mt-3 flex items-center justify-between">
+        {items.map(({ label, Icon }) => (
+          <div key={label} className="flex flex-col items-center gap-1.5">
+            <div
+              className="flex h-10 w-10 items-center justify-center rounded-full"
+              style={{ backgroundColor: `${ACCENT}14`, color: ACCENT }}
+            >
+              <Icon size={20} />
+            </div>
+            <span className="text-[10px] text-neutral-400">{label}</span>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -1151,6 +1209,19 @@ export default function App() {
       </div>
     ),
     monthCalendar: <MonthCalendar jobs={jobs} />,
+    iconPreview: (
+      <div>
+        <p className="mb-3 text-sm text-neutral-500">
+          Same 5 icons in 5 different packs — tell me which style to use everywhere and I'll
+          swap it in and remove this section.
+        </p>
+        <div className="flex flex-col gap-3">
+          {ICON_PACKS.map((pack) => (
+            <IconPackRow key={pack.name} pack={pack} />
+          ))}
+        </div>
+      </div>
+    ),
     allLeads: (
       <div>
         <div
