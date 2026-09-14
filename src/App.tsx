@@ -1,4 +1,5 @@
 import { useState } from "react";
+import jcLogo from "./assets/jc-logo-horizontal.png";
 
 type JobStatus = "Booked" | "In Progress" | "Done";
 type Service = "Driveway" | "Sealcoat" | "Parking Lot";
@@ -316,10 +317,10 @@ export default function App() {
     <div className="min-h-screen bg-[#faf9f7] pb-12">
       <header className="flex items-center justify-between border-b border-neutral-100 bg-white px-5 py-4">
         <div>
-          <p className="text-lg font-bold text-neutral-900">
-            J&amp;C <span style={{ color: ACCENT }}>Command Center</span>
+          <img src={jcLogo} alt="J&amp;C Asphalt" className="h-8 w-auto" />
+          <p className="mt-1 text-xs font-medium uppercase tracking-wide text-neutral-400">
+            Command Center
           </p>
-          <p className="text-xs text-neutral-400">Asphalt Paving</p>
         </div>
       </header>
 
