@@ -5,7 +5,7 @@ import { addDaysISO, buildMonthGrid, toISODate } from "./lib/calendarGrid";
 type JobStatus = "Booked" | "In Progress" | "Done";
 type Service = "Driveway" | "Sealcoat" | "Parking Lot";
 type ClosedBy = "Jeffrey" | "Alex (Sales Rep)" | null;
-type LeadStage = "Needs Visit" | "Needs Call";
+type LeadStage = "New" | "Contacted" | "Quoted" | "Needs Visit" | "Needs Call";
 
 /** Fixed "today" anchor for this mockup's placeholder data (real date: 2026-09-14). */
 const TODAY_ISO = "2026-09-14";
@@ -16,6 +16,10 @@ interface Lead {
   stage: LeadStage;
   reason: string;
   service: Service;
+  /** ISO date (YYYY-MM-DD) the lead came in */
+  receivedDate: string;
+  phone: string;
+  email: string;
 }
 
 interface Job {
@@ -51,6 +55,9 @@ const initialLeads: Lead[] = [
     stage: "Needs Visit",
     reason: "Large parking lot bid — wants a walkthrough before signing",
     service: "Parking Lot",
+    receivedDate: addDaysISO(TODAY_ISO, -5),
+    phone: "8015550142",
+    email: "contact@mercerpm.example.com",
   },
   {
     id: 102,
@@ -58,6 +65,9 @@ const initialLeads: Lead[] = [
     stage: "Needs Visit",
     reason: "Asked to see finish samples in person",
     service: "Driveway",
+    receivedDate: addDaysISO(TODAY_ISO, -3),
+    phone: "8015550198",
+    email: "deborah.hale@example.com",
   },
   {
     id: 103,
@@ -65,6 +75,9 @@ const initialLeads: Lead[] = [
     stage: "Needs Call",
     reason: "Quoted 6 days ago, hasn't responded",
     service: "Sealcoat",
+    receivedDate: addDaysISO(TODAY_ISO, -6),
+    phone: "8015550117",
+    email: "tyler.combs@example.com",
   },
   {
     id: 104,
@@ -72,6 +85,9 @@ const initialLeads: Lead[] = [
     stage: "Needs Call",
     reason: "Said she needs to check with her husband",
     service: "Driveway",
+    receivedDate: addDaysISO(TODAY_ISO, -4),
+    phone: "8015550163",
+    email: "nancy.ruiz@example.com",
   },
   {
     id: 105,
@@ -79,6 +95,69 @@ const initialLeads: Lead[] = [
     stage: "Needs Call",
     reason: "Requested a callback, missed twice",
     service: "Driveway",
+    receivedDate: addDaysISO(TODAY_ISO, -2),
+    phone: "8015550129",
+    email: "pete.alvarado@example.com",
+  },
+  {
+    id: 106,
+    name: "Jason Farr",
+    stage: "New",
+    reason: "New inquiry via website form",
+    service: "Driveway",
+    receivedDate: TODAY_ISO,
+    phone: "8015550185",
+    email: "jason.farr@example.com",
+  },
+  {
+    id: 107,
+    name: "Whitney Cole",
+    stage: "New",
+    reason: "New inquiry via text",
+    service: "Sealcoat",
+    receivedDate: TODAY_ISO,
+    phone: "8015550171",
+    email: "whitney.cole@example.com",
+  },
+  {
+    id: 108,
+    name: "Derek Simmons",
+    stage: "Contacted",
+    reason: "Left a voicemail, following up",
+    service: "Driveway",
+    receivedDate: addDaysISO(TODAY_ISO, -1),
+    phone: "8015550156",
+    email: "derek.simmons@example.com",
+  },
+  {
+    id: 109,
+    name: "Grace Lindqvist",
+    stage: "Contacted",
+    reason: "Answered questions about pricing",
+    service: "Parking Lot",
+    receivedDate: addDaysISO(TODAY_ISO, -1),
+    phone: "8015550134",
+    email: "grace.lindqvist@example.com",
+  },
+  {
+    id: 110,
+    name: "Owen Betts",
+    stage: "Quoted",
+    reason: "Sent quote for sealcoat, awaiting response",
+    service: "Sealcoat",
+    receivedDate: addDaysISO(TODAY_ISO, -2),
+    phone: "8015550122",
+    email: "owen.betts@example.com",
+  },
+  {
+    id: 111,
+    name: "Priya Shah",
+    stage: "Quoted",
+    reason: "Sent quote for driveway, awaiting response",
+    service: "Driveway",
+    receivedDate: addDaysISO(TODAY_ISO, -3),
+    phone: "8015550149",
+    email: "priya.shah@example.com",
   },
 ];
 
@@ -189,11 +268,23 @@ const SECTION_TITLES: Record<string, string> = {
   needsVisit: "Needs a Visit",
   needsCall: "Needs a Call",
   pulse: "Overview",
+  allLeads: "All Leads",
   todaysJobs: "Today's Jobs",
   upcomingJobs: "Upcoming Jobs",
   monthCalendar: "Job Calendar",
   activity: "Recent Activity",
 };
+
+const STAGE_COLOR: Record<LeadStage, string> = {
+  New: "#3b6ea5",
+  Contacted: "#b8860b",
+  Quoted: "#2f6f4f",
+  "Needs Visit": ACCENT,
+  "Needs Call": ACCENT,
+};
+
+const LEAD_ROW_HEIGHT = 76;
+const LEAD_LIST_VISIBLE_ROWS = 5;
 
 type PageId = "todo" | "leads" | "jobs";
 
@@ -205,7 +296,7 @@ const PAGES: { id: PageId; label: string; icon: string }[] = [
 
 const DEFAULT_ORDER: Record<PageId, string[]> = {
   todo: ["todaysJobs", "needsVisit", "needsCall"],
-  leads: ["pulse", "activity"],
+  leads: ["pulse", "allLeads", "activity"],
   jobs: ["upcomingJobs", "monthCalendar"],
 };
 
@@ -420,6 +511,52 @@ function LeadRow({
         >
           ✓ Close &amp; book
         </button>
+      </div>
+    </div>
+  );
+}
+
+function LeadContactRow({ lead }: { lead: Lead }) {
+  return (
+    <div
+      className="flex items-center gap-3 border-b border-neutral-100 py-3 last:border-0"
+      style={{ minHeight: LEAD_ROW_HEIGHT }}
+    >
+      <span className="text-xl leading-none">{serviceIcon[lead.service]}</span>
+      <div className="min-w-0 flex-1">
+        <p className="truncate font-semibold text-neutral-900">{lead.name}</p>
+        <p className="truncate text-xs text-neutral-400">
+          {formatShortDate(lead.receivedDate)} · {lead.service}
+        </p>
+      </div>
+      <span
+        className="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold"
+        style={{ backgroundColor: `${STAGE_COLOR[lead.stage]}1a`, color: STAGE_COLOR[lead.stage] }}
+      >
+        {lead.stage}
+      </span>
+      <div className="flex shrink-0 items-center gap-1">
+        <a
+          href={`tel:${lead.phone}`}
+          aria-label={`Call ${lead.name}`}
+          className="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-50 text-sm"
+        >
+          📞
+        </a>
+        <a
+          href={`sms:${lead.phone}`}
+          aria-label={`Text ${lead.name}`}
+          className="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-50 text-sm"
+        >
+          💬
+        </a>
+        <a
+          href={`mailto:${lead.email}`}
+          aria-label={`Email ${lead.name}`}
+          className="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-50 text-sm"
+        >
+          ✉️
+        </a>
       </div>
     </div>
   );
@@ -849,6 +986,7 @@ export default function App() {
 
   const needsVisit = leads.filter((l) => l.stage === "Needs Visit");
   const needsCall = leads.filter((l) => l.stage === "Needs Call");
+  const leadsByDate = [...leads].sort((a, b) => (a.receivedDate < b.receivedDate ? 1 : -1));
 
   const leadCounts = { New: 2, Contacted: 1, Booked: 2, Done: 1 };
   const totalLeads = Object.values(leadCounts).reduce((a, b) => a + b, 0);
@@ -886,6 +1024,7 @@ export default function App() {
       </span>
     ),
     upcomingJobs: <span className="text-sm font-medium text-neutral-400">{jobs.length} jobs</span>,
+    allLeads: <span className="text-sm font-medium text-neutral-400">{leadsByDate.length}</span>,
   };
 
   const sectionContent: Record<string, React.ReactNode> = {
@@ -1012,6 +1151,21 @@ export default function App() {
       </div>
     ),
     monthCalendar: <MonthCalendar jobs={jobs} />,
+    allLeads: (
+      <div>
+        <div
+          className="overflow-y-auto"
+          style={{ maxHeight: LEAD_ROW_HEIGHT * LEAD_LIST_VISIBLE_ROWS }}
+        >
+          {leadsByDate.map((lead) => (
+            <LeadContactRow key={lead.id} lead={lead} />
+          ))}
+        </div>
+        <p className="mt-3 text-center text-xs text-neutral-400">
+          {leadsByDate.length} leads · scroll for more
+        </p>
+      </div>
+    ),
     activity: (
       <ul className="flex flex-col gap-3">
         {activity.map((item, i) => (
