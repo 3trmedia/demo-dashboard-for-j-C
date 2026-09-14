@@ -177,18 +177,21 @@ const SECTION_TITLES: Record<string, string> = {
   activity: "Recent Activity",
 };
 
-const DEFAULT_ORDER = [
-  "needsVisit",
-  "needsCall",
-  "pulse",
-  "todaysJobs",
-  "upcomingJobs",
-  "activity",
+type PageId = "todo" | "leads" | "jobs";
+
+const PAGES: { id: PageId; label: string; icon: string }[] = [
+  { id: "todo", label: "To Do", icon: "✅" },
+  { id: "leads", label: "Leads", icon: "📈" },
+  { id: "jobs", label: "Jobs", icon: "🧰" },
 ];
 
-const DEFAULT_COLLAPSED: Record<string, boolean> = {
-  upcomingJobs: true,
+const DEFAULT_ORDER: Record<PageId, string[]> = {
+  todo: ["needsVisit", "needsCall", "todaysJobs"],
+  leads: ["pulse", "activity"],
+  jobs: ["upcomingJobs"],
 };
+
+const DEFAULT_COLLAPSED: Record<string, boolean> = {};
 
 const HOLD_MS = 350;
 const MOVE_CANCEL_PX = 8;
@@ -382,6 +385,7 @@ function DraggableSection({
   registerRef,
   isDragging,
   dragY,
+  showHandle = true,
   children,
 }: {
   title: string;
@@ -394,6 +398,7 @@ function DraggableSection({
   registerRef: (el: HTMLDivElement | null) => void;
   isDragging: boolean;
   dragY: number;
+  showHandle?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -423,17 +428,19 @@ function DraggableSection({
         </button>
         <div className="flex shrink-0 items-center gap-2">
           {badge}
-          <span
-            onPointerDown={onHandlePointerDown}
-            onPointerMove={onHandlePointerMove}
-            onPointerUp={onHandlePointerUp}
-            onPointerCancel={onHandlePointerUp}
-            onContextMenu={(e) => e.preventDefault()}
-            className="cursor-grab select-none rounded px-2 py-1 text-base leading-none text-neutral-300 active:cursor-grabbing"
-            style={{ touchAction: "none" }}
-          >
-            ⠿
-          </span>
+          {showHandle && (
+            <span
+              onPointerDown={onHandlePointerDown}
+              onPointerMove={onHandlePointerMove}
+              onPointerUp={onHandlePointerUp}
+              onPointerCancel={onHandlePointerUp}
+              onContextMenu={(e) => e.preventDefault()}
+              className="cursor-grab select-none rounded px-2 py-1 text-base leading-none text-neutral-300 active:cursor-grabbing"
+              style={{ touchAction: "none" }}
+            >
+              ⠿
+            </span>
+          )}
         </div>
       </div>
       {!collapsed && <div className="mt-4">{children}</div>}
@@ -446,18 +453,26 @@ export default function App() {
   const [jobs, setJobs] = useState<Job[]>(initialJobs);
   const [activity, setActivity] = useState<ActivityItem[]>(initialActivity);
 
-  const [order, setOrder] = useState<string[]>(() => loadJSON("jc-section-order", DEFAULT_ORDER));
+  const [page, setPage] = useState<PageId>("todo");
+  const [ordersByPage, setOrdersByPage] = useState<Record<PageId, string[]>>(() =>
+    loadJSON("jc-section-order", DEFAULT_ORDER),
+  );
   const [collapsedMap, setCollapsedMap] = useState<Record<string, boolean>>(() =>
     loadJSON("jc-section-collapsed", DEFAULT_COLLAPSED),
   );
 
+  const order = ordersByPage[page];
+  function setOrder(next: string[]) {
+    setOrdersByPage((prev) => ({ ...prev, [page]: next }));
+  }
+
   useEffect(() => {
     try {
-      localStorage.setItem("jc-section-order", JSON.stringify(order));
+      localStorage.setItem("jc-section-order", JSON.stringify(ordersByPage));
     } catch {
       // ignore — order just won't persist this session
     }
-  }, [order]);
+  }, [ordersByPage]);
 
   useEffect(() => {
     try {
@@ -801,12 +816,12 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#faf9f7] pb-12">
+    <div className="min-h-screen bg-[#faf9f7] pb-24">
       <header className="flex items-center justify-between border-b border-neutral-100 bg-white px-5 py-4">
         <div>
           <img src={jcLogo} alt="J&amp;C Asphalt" className="h-8 w-auto" />
           <p className="mt-1 text-xs font-medium uppercase tracking-wide text-neutral-400">
-            Command Center
+            {PAGES.find((p) => p.id === page)?.label}
           </p>
         </div>
       </header>
@@ -827,11 +842,31 @@ export default function App() {
             }}
             isDragging={dragId === id}
             dragY={dragY}
+            showHandle={order.length > 1}
           >
             {sectionContent[id]}
           </DraggableSection>
         ))}
       </main>
+
+      <nav className="fixed inset-x-0 bottom-0 border-t border-neutral-100 bg-white pb-[env(safe-area-inset-bottom)]">
+        <div className="mx-auto flex max-w-2xl">
+          {PAGES.map((p) => {
+            const active = p.id === page;
+            return (
+              <button
+                key={p.id}
+                onClick={() => setPage(p.id)}
+                className="flex flex-1 flex-col items-center gap-0.5 py-2.5 text-xs font-medium"
+                style={{ color: active ? ACCENT : "#a3a3a3" }}
+              >
+                <span className="text-lg leading-none">{p.icon}</span>
+                {p.label}
+              </button>
+            );
+          })}
+        </div>
+      </nav>
     </div>
   );
 }
